@@ -1,5 +1,10 @@
 --[[
-    TODO: 将速度, 航向, 高度, 升降率, 滚转率检查单独放在Monitior检查, 状态变更只进行状态过渡和需要检查数据的变更
+    DONE: 将航向, 升降率, 滚转, 俯仰, 对齐中线检查单独放在Monitior检查, 状态变更只进行状态过渡和需要特殊检查数据的变更
+
+    TODO: 一边到五边的飞行数据检查和状态转换
+    TODO: 训练模式下的提示
+    TODO: 接地后输出成绩
+    TODO: 添加音频
 
 ]]
 
@@ -24,6 +29,7 @@ do
         BeforeTaxi = 'BeforeTaxi',
         Taxing = 'Taxing',
         HoldShort = 'HoldShort',
+        BeforeTakeOff = 'BeforeTakeOff',
         Rolling = 'Rolling',
         Climb = 'Climb',
         UpwindLeg = 'UpwindLeg', --一边
@@ -65,10 +71,25 @@ do
         obj.BeforeTakeOffCheckList = checkLists.BeforeTakeOffCheckList or {finish = true}
         obj.BeforeLandingCheckList = checkLists.BeforeLandingCheckList or {finish = true}
 
-        obj.onCourse = false
-        obj.onCenterLine = false
+        obj.pitchUpLimit = nil
+        obj.headingLimit = nil
+        obj.climbRateLimit = nil
+        obj.decentRateLimit = nil
+        obj.rollLimit = nil
+        obj.centerLine = nil
+        
         obj.onAltitude = false
         obj.onSpeed = false
+
+        obj.onCourse = false
+        obj.onCenterLine = false
+        obj.onPitch = false
+        obj.onRoll = false
+        obj.onClimbRate = false
+
+        obj.flaps = false
+        obj.landingGear = false
+        obj.lights = false
 
         obj.crosswindLegHeading = nil
         obj.downwindLegHeading = nil
@@ -79,7 +100,7 @@ do
             radio = 5,
             taxi = 5,
             takeOff = 5,
-            course = 5,
+            cruise = 5,
             attitude = 5,
             approch = 5,
             landing = 5,
@@ -88,11 +109,37 @@ do
         obj.penalties = {}
 
         obj.MonitorID = nil
+        obj.repeatTime = PlayerMonitor.MonitorRepeatTime
 
         setmetatable(obj,self)
         self.__index = self
 
-        return 
+        local ev = {}
+        ev.context = self
+
+        function ev:onEvent(event)
+            if event.id == world.event.S_EVENT_TAKEOFF and event.initiator and event.initiator.getPlayerName then
+                local unit = event.initiator
+                if not unit then return end
+
+                local group = unit:getGroup()
+                if not group then return end
+
+                local groupName = group:getName()
+                if not groupName then return end    
+
+                PlayerMonitor.allPlayers[groupName].takeOffPoint = unit:getPoint()
+                PlayerMonitor.allPlayers[groupName].stage = PlayerMonitor.Stage.Climb
+            end
+
+            if event.id == world.event.S_EVENT_LAND and event.initiator and event.initiator.getPlayerName then
+                
+            end
+        end
+        world.addEventHandler(ev)
+
+        PlayerMonitor.allGroups[groupName] = obj
+        return obj
     end
 
     function PlayerMonitor:remove()
@@ -103,9 +150,64 @@ do
         PlayerMonitor.allGroups[self.groupName] = nil
     end
 
+    function PlayerMonitor:setStandards(vars)
+        self.headingLimit = vars.heading or nil
+        self.pitchUpLimit = vars.pitchUpLimit or nil
+        self.climbRateLimit = vars.climbRate or nil
+        self.decentRateLimit = vars.decent or nil
+        self.rollLimit = vars.roll or nil
+        self.centerLine = vars.centerLine or nil
+
+        if vars.heading then
+            self.onCourse = false
+        end
+        if vars.pitchUpLimit then
+            self.onPitch = false
+        end
+        if vars.climbRate or vars.decent then
+            self.onClimbRate = false
+        end
+        if vars.roll then
+            self.onRoll = false
+        end
+        if vars.centerLine then
+            self.onCenterLine = false
+        end
+    end
+
+    function PlayerMonitor.isIntersect(myLine_Start, myLine_End, otherLine_Start, otherLine_End)
+        local function ccw(A, B, C)
+            return (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x)
+        end
+    
+        local function intersect(A, B, C, D)
+            return ccw(A, C, D) ~= ccw(B, C, D) and ccw(A, B, C) ~= ccw(A, B, D)
+        end
+    
+        return intersect(myLine_Start, myLine_End, otherLine_Start, otherLine_End)
+    end
+
+    function PlayerMonitor.checkLineup(unit,unitPoint,heading,centerLine)
+        if not unit or not unit.getTypeName then return false end
+        if not centerLine then return false end
+        
+        local lines = centerLine.line
+
+        local LeftWheelPos = Utils.vecTranslate(unitPoint,heading-90,mist.utils.feetToMeters(Config.Data.L39C.LeftWheel))
+        local RightWheelPos = Utils.vecTranslate(unitPoint,heading+90,mist.utils.feetToMeters(Config.Data.L39C.RightWheel))
+        
+        for i=1,#lines-1 do
+            local centerLine_Start = lines[i]
+            local centerLine_end = lines[i+1]
+
+            if PlayerMonitor.isIntersect(LeftWheelPos, RightWheelPos, centerLine_Start, centerLine_end) then return true end
+        end
+
+        return false
+    end
+
     function PlayerMonitor._MonitorFunc(vars,time)
         local self = vars.context
-        local repeatTime = vars.repeatTime
         
         if not self:validation() then
             self:remove()
@@ -114,14 +216,253 @@ do
 
         local unit = self.unit
         local unitPoint = unit:getPoint()
+
+        
+        self.penalties = self.penalties or {}
+        self.penalties[self.stage] = self.penalties[self.stage] or {}
+        local tableSize = Utils.getTbaleSize(self.penalties[self.stage])
+        local lastUpdateTime = timer.getTime()-10
+        if tableSize > 0 then
+            lastUpdateTime = self.penalties[self.stage].lastUpdateTime
+        end
+
+        if self.centerLine then
+
+            local unitPosition = unit:getPosition()
+            local Heading = math.atan2(unitPosition.x.z, unitPosition.x.x)
+            if Heading < 0 then
+                Heading = Heading + 2*math.pi	-- put heading in range of 0 to 2*pi
+            end
+
+            if not self.onCenterLine then
+                if PlayerMonitor.checkLineup(unit,unitPoint,Heading,self.centerLine) then
+                    self.onCenterLine = true
+
+                    --Other Logic
+                end
+            end
+
+            if self.onCenterLine then
+                if not PlayerMonitor.checkLineup(unit,unitPoint,Heading,self.centerLine) then
+                    self.onCenterLine = false
+
+                    --Add penalties
+                    self.penalties[self.stage]['lineUp'] = self.penalties[self.stage]['lineUp'] or {}
+
+                    if timer.getTime() - lastUpdateTime >= 10 then
+                        local newPenalty = {
+                            reason = '滑行、滑跑未压中线或偏离',
+                            point = 1,
+                            time = timer.getTime()
+                        }
+
+                        table.insert(self.penalties[self.stage]['lineUp'],newPenalty)
+                        self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                    end
+                end
+            end
+
+        end
+
+        if self.headingLimit then
+            local unitPosition = unit:getPosition()
+            local Heading = math.atan2(unitPosition.x.z, unitPosition.x.x)
+            if Heading < 0 then
+                Heading = Heading + 2*math.pi	-- put heading in range of 0 to 2*pi
+            end
+
+            if not self.onCourse then
+                if math.abs(Heading - self.headingLimit) <= 3 then
+                    self.onCourse = true
+
+                    --Other Logic
+                end
+            end
+
+            if self.onCourse then
+                if math.abs(Heading - self.headingLimit) > 3 then
+                    self.onCourse = false
+
+                    --Add penalties
+                    self.penalties[self.stage]['heading'] = self.penalties[self.stage]['heading'] or {}
+
+                    if timer.getTime() - lastUpdateTime >= 10 then
+                        local newPenalty = {
+                            reason ='滑行、滑跑未压中线或偏离',
+                            point = 1,
+                            time = timer.getTime()
+                        }
+                        if math.abs(Heading - self.headingLimit) > 5 then
+                            newPenalty.point = 2
+                        end
+
+                        table.insert(self.penalties[self.stage]['heading'],newPenalty)
+                        self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                    end
+                end
+            end
+
+        end
+
+        if self.climbRateLimit then
+            
+            local velocity = unit:getVelocity()
+            local climbRate = velocity.y
+            if not self.onClimbRate then
+                if climbRate < self.climbRateLimit then
+                    self.onClimbRate = true
+
+                    --Other Logic
+                end
+            end
+
+            if self.onClimbRate then
+                if climbRate > self.climbRateLimit then
+                    self.onClimbRate = false
+
+                    --Add penalties
+                    self.penalties[self.stage]['climb'] = self.penalties[self.stage]['climb'] or {}
+
+                    local gearUp = false
+                    if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_L) <= 0.85 or 
+                       unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_R) <= 0.85 or 
+                       unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_N) <= 0.85 
+                    then
+                        gearUp = true
+                    end
+
+                    if not gearUp then
+                        if climbRate < 0 then
+                            if timer.getTime() - lastUpdateTime >= 10 then
+                                local newPenalty = {
+                                    reason ='起飞松杆出现掉高',
+                                    point = 3,
+                                    time = timer.getTime()
+                                }
+    
+                                table.insert(self.penalties[self.stage]['climb'],newPenalty)
+                                self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                            end
+                        end
+                    end
+
+                    if gearUp then
+                        if climbRate < -5 then
+                            if timer.getTime() - lastUpdateTime >= 10 then
+                                local newPenalty = {
+                                    reason ='爬升中垂直速率为负',
+                                    point = 35,
+                                    time = timer.getTime()
+                                }
+
+                                table.insert(self.penalties[self.stage]['climb'],newPenalty)
+                                self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                            end
+                        end
+                    end
+                end
+            end
+
+        end
+
+        if self.decentRateLimit then
+            
+            local velocity = unit:getVelocity()
+            local climbRate = velocity.y
+            if not self.onClimbRate then
+                if climbRate > self.decentRateLimit then
+                    self.onClimbRate = true
+
+                    --Other Logic
+                end
+            end
+
+            if self.onClimbRate then
+                if climbRate < self.climbRateLimit then
+                    self.onClimbRate = false
+
+                    --Add penalties
+                    if climbRate > 5 then
+                        self.penalties[self.stage]['decent'] = self.penalties[self.stage]['decent'] or {}
+
+                        if Utils.getTbaleSize(self.penalties[self.stage]['decent']) <= 0  then
+                            local newPenalty = {
+                                reason ='下高出现上升',
+                                point = 35,
+                                time = timer.getTime()
+                            }
+
+                            table.insert(self.penalties[self.stage]['decent'],newPenalty)
+                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                        end
+                    end
+                end
+            end
+
+        end
+
+        if self.pitchUpLimit then
+
+            local unitpos = unit:getPosition()
+            local Pitch = math.asin(unitpos.x.y)
+            if not self.onPitch then
+                if Pitch < self.pitchUpLimit then
+                    self.onPitch = true
+
+                    --Other Logic
+                end
+            end
+
+            if self.onPitch then
+                if Pitch > self.pitchUpLimit then
+                    self.onPitch = false
+
+                    --Other Logic
+                end
+            end
+
+        end
+
+        if self.rollLimit then
+
+            local unitpos = unit:getPosition()
+            local cp = mist.vec.cp(unitpos.x, {x = 0, y = 1, z = 0})
+            local dp = mist.vec.dp(cp, unitpos.z)
+            local Roll = math.acos(dp/(mist.vec.mag(cp)*mist.vec.mag(unitpos.z)))
+
+            if not self.onRoll then
+                if Roll < self.rollLimit then
+                    self.onRoll = true
+
+                    --Other Logic
+                end
+            end
+
+            if self.onRoll then
+                if Roll > self.rollLimit then
+                    self.onRoll = false
+
+                    --Other Logic
+                end
+            end
+
+        end
+        
         --转换到滑行阶段
         if mist.pointInPolygon(unitPoint,Config.TaxiWays.TaxiWay) then
-            local AGL = unitPoint.y
+            local AGL = unitPoint.y - land.getHeight({x = unitPoint.x,y = unitPoint.z})
             if AGL <= Config.Data.L39C.landAlt then
 
                 Utils.messageToAll('Enter Taxi') --Debug
 
                 self.stage = PlayerMonitor.Stage.Taxing
+
+                local speedMax = 60
+                if mist.pointInPolygon(unitPoint,Config.TaxiWays.TaxiWay_Turn) then
+                    speedMax = 20
+                end
+
+                self:setStandards({centerLine = Config.TaxiWays.TaxiWay_Center})
             end
         end
 
@@ -138,7 +479,7 @@ do
                 if not self.BeforeTaxiCheckList.finish then
 
                     if not self:PerformCheckList(self.BeforeTaxiCheckList,unit) then
-                        return time+repeatTime
+                        return time+1
                     end
 
                     if self.BeforeTaxiCheckList.finish then
@@ -164,7 +505,7 @@ do
                 4.滑行直线超过 60,转向超过 20 每次扣 1 分,三次扣 5 分.
                 5.未正确使用灯光扣 1 分
 
-                状态转换: 进入滑行道范围转为滑行状态
+                状态转换: 进入跑道范围转为起飞前准备状态
             ]]
 
             --转换到短停阶段
@@ -176,6 +517,87 @@ do
                     Utils.messageToAll('Enter HoldShort') --Debug
 
                     self.stage = PlayerMonitor.Stage.HoldShort
+                    return time+self.repeatTime
+                end
+            end
+
+            --转换进入跑道
+            if mist.pointInPolygon(unitPoint,Config.RunWay.RunwayPolygon) then
+
+                Utils.messageToAll('Enter BeforeTakeOff') --Debug
+                self.stage = PlayerMonitor.Stage.BeforeTakeOff
+
+                self:setStandards({centerLine = Config.RunWay.Runway_Center})
+                return time+self.repeatTime
+            end
+
+            local speedLimit = 60
+            --进入滑行道转向区域
+            if mist.pointInPolygon(unitPoint,Config.TaxiWays.TaxiWay_Turn) then
+                speedLimit = 20
+            end
+
+            self.penalties = self.penalties or {}
+            self.penalties[self.stage] = self.penalties[self.stage] or {}
+
+            local tableSize = Utils.getTbaleSize(self.penalties[self.stage])
+            local lastUpdateTime = timer.getTime()-10
+            if tableSize > 0 then
+                lastUpdateTime = self.penalties[self.stage].lastUpdateTime
+            end
+
+            if timer.getTime() - lastUpdateTime >= 10 then
+                local speedKmph = mist.utils.converter('mps','kmph',mist.vec.mag(unit:getVelocity()))
+                if not self.onSpeed then
+                    if (speedKmph - speedLimit ) < speedLimit*(1+0.25) then
+                        self.onSpeed = true
+
+                        --Other Logic
+                    end
+                end
+
+                if self.onSpeed then
+                    if (speedKmph - speedLimit ) >= speedLimit*(1+0.25) then
+                        self.onSpeed = false
+                        
+                        --Add penalties
+                        self.penalties = self.penalties or {}
+                        self.penalties[self.stage] = self.penalties[self.stage] or {}
+                        self.penalties[self.stage]['speed'] = self.penalties[self.stage]['speed'] or {}
+
+                        local newPenalty = {
+                            reason = string.format('滑行速度超限≤25%(限速:%d km/h, 记录时: %d km/h)',speedLimit, math.floor(speedKmph)),
+                            point = 1,
+                            time = timer.getTime()
+                        }
+
+                        if (speedKmph - speedLimit ) >= speedLimit*(1+0.25) and (speedKmph - speedLimit ) <= speedLimit*(1+0.5) then
+                            newPenalty.reason = string.format('滑行速度超限25%~50%(限速:%d km/h, 记录时: %d km/h)',speedLimit, math.floor(speedKmph))
+                            newPenalty.point = 2
+                        end
+
+                        if (speedKmph - speedLimit ) >= speedLimit*(1+0.5) then
+                            newPenalty.reason = string.format('滑行速度超限≥50%(限速:%d km/h, 记录时: %d km/h)',speedLimit, math.floor(speedKmph))
+                            newPenalty.point = 5
+                        end
+
+                        table.insert(self.penalties[self.stage]['speed'],newPenalty)
+                        self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                    end
+                end
+                
+                self.penalties[self.stage]['lights'] = self.penalties[self.stage]['lights'] or {}
+                if Utils.getTbaleSize(self.penalties[self.stage]['lights']) <= 0 then
+                    if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.TaxiLightID) <= 0 then
+                        local newPenalty = {
+                            reason = '未正确使用灯光',
+                            point = 1,
+                            time = timer.getTime()
+                        }
+
+                        table.insert(self.penalties[self.stage]['lights'],newPenalty)
+                        self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                    end
                 end
             end
         end
@@ -189,6 +611,34 @@ do
 
                 状态转换: 进入滑行道范围转为滑行状态
             ]]
+            local Speed = math.floor(mist.utils.converter('mps','kmph',mist.vec.mag(unit:getVelocity())))
+            if Speed <= 10 then
+                if not self.BeforeTakeOffCheckList.finish then
+
+                    if not self:PerformCheckList(self.BeforeTakeOffCheckList,unit) then
+                        return time+1
+                    end
+
+                    if self.BeforeTakeOffCheckList.finish then
+                        local unitID = unit:getID()
+                        local msg = self.BeforeTakeOffCheckList.checkListName..', 完成.'
+                        trigger.action.outTextForUnit(unitID,msg,10)
+                    end
+
+                end
+            end
+        end
+
+        if self.stage == PlayerMonitor.Stage.BeforeTakeOff then
+            --到滑跑阶段
+            local Speed = mist.utils.converter('mps','kmph',mist.vec.mag(unit:getVelocity()))
+            if Speed > 60 then
+                Utils.messageToAll('Enter Rolling') --Debug
+                self.stage = PlayerMonitor.Stage.Rolling
+
+                self:setStandards({pitchUpLimit = 10,climbRate = 8,centerLine = Config.RunWay.Runway_Center})
+                return time+self.repeatTime
+            end
         end
 
         if self.stage == PlayerMonitor.Stage.Rolling then
@@ -202,9 +652,84 @@ do
                 2.滑跑迎角＜15°＞10°扣 1 分，＞15°扣 3 分
                 3.起飞、着陆未放襟翼扣 3 分
                 4.起飞、着陆擦尾扣 3 分
+                5.未正确使用灯光扣 1 分
 
-                状态转换: 进入滑行道范围转为滑行状态
+                状态转换: 离地建立正上升后转为爬升阶段
             ]]
+
+            --到起飞爬升阶段
+            local unitVelocity = unit:getVelocity()
+            local ClimbRate = unitVelocity.y
+            if ClimbRate > 0 then
+                Utils.messageToAll('Enter Climb') --Debug
+                self.stage = PlayerMonitor.Stage.Climb
+                
+                self.takeOffPoint = unitPoint
+                self:setStandards({heading = Config.RunWay[self.ActiveRunWay].heading,climbRate = 8,pitchUpLimit = 10})
+                return time+self.repeatTime
+            end
+
+            self.penalties = self.penalties or {}
+            self.penalties[self.stage] = self.penalties[self.stage] or {}
+
+            if not self.penalties[self.stage]['lights'] then
+                if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.TaxiLightID) <= 0 then
+                    local newPenalty = {
+                        reason = '未正确使用灯光',
+                        point = 1,
+                        time = timer.getTime()
+                    }
+
+                    table.insert(self.penalties[self.stage]['lights'],newPenalty)
+                    self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                end
+            end
+
+            if timer.getTime() - lastUpdateTime >= 10 then
+                if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.Flap_L) <= 0 or unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.Flap_L) >= 0.9 then
+                    local newPenalty = {
+                        reason = '起飞、着陆未放襟翼',
+                        point = 3,
+                        time = timer.getTime()
+                    }
+
+                    table.insert(self.penalties[self.stage]['flaps'],newPenalty)
+                    self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                end
+            end
+            
+            if mist.vec.mag(unitVelocity) ~= 0 then
+                if timer.getTime() - lastUpdateTime >= 10 then
+                    local unitpos = unit:getPosition()
+                    local AxialVel = {}	--unit velocity transformed into aircraft axes directions
+
+                    --transform velocity components in direction of aircraft axes.
+                    AxialVel.x = mist.vec.dp(unitpos.x, unitVelocity)
+                    AxialVel.y = mist.vec.dp(unitpos.y, unitVelocity)
+                    AxialVel.z = mist.vec.dp(unitpos.z, unitVelocity)
+
+                    local AoA = math.acos(mist.vec.dp({x = 1, y = 0, z = 0}, {x = AxialVel.x, y = AxialVel.y, z = 0})/mist.vec.mag({x = AxialVel.x, y = AxialVel.y, z = 0}))
+                    if AxialVel.y > 0 then
+                        AoA = -AoA
+                    end
+
+                    if AoA > 10 then
+                        local newPenalty = {
+                            reason = '滑跑迎角 >10°',
+                            point = 1,
+                            time = timer.getTime()
+                        }
+
+                        if AoA > 15 then
+                            newPenalty.reason = '滑跑迎角 >15°'
+                            newPenalty.point = 1
+                        end
+                        
+                        table.insert(self.penalties[self.stage]['AoA'],newPenalty)
+                        self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                    end
+                end
+            end
         end
 
         if self.stage == PlayerMonitor.Stage.Climb then
@@ -219,11 +744,43 @@ do
                 扣分:
                 1.起飞偏航＞3° ＜5° 扣 1 分，＞5°扣 2 分
                 2.起飞 100 米后未收起落架扣 1 分
-                3.起飞松杆出现掉高扣 3 分
+                3.起飞松杆出现掉高扣 3 分(有待完善)
                 4.起飞出现反复接地扣 5 分
 
-                状态转换: 进入滑行道范围转为滑行状态
+                状态转换: 雷达高超过50M转为一边
             ]]
+
+            --转为一边
+            local AGl = unitPoint.y - land.getHeight({x = unitPoint.x,y = unitPoint.z})
+            if AGl > 50 then
+                Utils.messageToAll('Enter UpwindLeg') --Debug
+                self.stage = PlayerMonitor.Stage.UpwindLeg
+                
+                self:setStandards({heading = Config.RunWay[self.ActiveRunWay].heading,climbRate = 8})
+                return time+self.repeatTime
+            end
+
+            self.penalties = self.penalties or {}
+            self.penalties[self.stage] = self.penalties[self.stage] or {}
+
+
+            if self.takeOffPoint then
+                if mist.utils.get2DDist(self.takeOffPoint,unitPoint) > 100 then  
+                    if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_L) > 0.85 or unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_R) > 0.85 or unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_N) then
+                        if timer.getTime() - lastUpdateTime >= 10 then
+                            local newPenalty = {
+                                reason = '起飞 100 米后未收起落架',
+                                point = 1,
+                                time = timer.getTime()
+                            }
+
+                            table.insert(self.penalties[self.stage]['landingGear'],newPenalty)
+                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                        end
+                    end
+                end
+            end
+
         end
 
         if self.stage == PlayerMonitor.Stage.UpwindLeg then
@@ -288,7 +845,6 @@ do
 
                 扣分:
                 1. 7公里未对正航向道扣 3 分
-                2.起飞、着陆未放襟翼扣 3 分
 
                 状态转换: 获得许可后放出起飞襟翼,开始转向,飞航向177,空速保持250-270 公里.
             ]]
@@ -356,9 +912,7 @@ do
             ]]
         end
 
-
-
-        return time+repeatTime
+        return time+self.repeatTime
     end
 
     function PlayerMonitor:start(Delay,RepeatScanSeconds)

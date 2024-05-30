@@ -6,6 +6,12 @@ do
         trigger.action.outText(text, displayTime, clearview)
     end
 
+    function Utils.getTbaleSize(table)
+        local size = 0
+        for _ in pairs(table) do size = size + 1 end
+        return size
+    end
+
     function Utils.vecTranslate(vec3,rad,distance)
         local point = {x = vec3.x,y = vec3.z or vec3.y,}
         
