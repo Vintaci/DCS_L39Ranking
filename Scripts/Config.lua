@@ -66,7 +66,7 @@ do
     Config.ActiveRunWay = '09'
 
     Config.Data = {
-        ['L39C'] = {
+        ['L-39C'] = {
             NoseWheel = 14, --feet front
             RightWheel = 5, --feet right
             LeftWheel = 5, --feet left
@@ -91,7 +91,7 @@ do
     }
 
     Config.checkLists = {
-        ['L39C'] = {
+        ['L-39C'] = {
             BeforeTaxiCheckList = {
                 checkListName = '滑行前检查单',
                 finish = false,
@@ -111,8 +111,8 @@ do
                     notice = false,
                     check = false,
                     func = function(player,unit,itemId)
-                        local L_flapPosition = unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.Flap_L)
-                        local R_flapPosition = unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.Flap_R)
+                        local L_flapPosition = unit:getDrawArgumentValue(Config.Data['L-39C'].DrawArguementIDs.Flap_L)
+                        local R_flapPosition = unit:getDrawArgumentValue(Config.Data['L-39C'].DrawArguementIDs.Flap_R)
                         if (L_flapPosition > 0 and L_flapPosition < 1) and (R_flapPosition > 0 and R_flapPosition < 1) then
                             player.BeforeTaxiCheckList[itemId].check = true
                         end
@@ -123,7 +123,7 @@ do
                     notice = false,
                     check = false,
                     func = function(player,unit,itemId)
-                        if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.TaxiLightID) > 0 then
+                        if unit:getDrawArgumentValue(Config.Data['L-39C'].DrawArguementIDs.TaxiLightID) > 0 then
                             player.BeforeTaxiCheckList[itemId].check = true
                         end
                     end,
@@ -138,8 +138,8 @@ do
                     notice = false,
                     check = false,
                     func = function(player,unit,itemId)
-                        local L_flapPosition = unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.Flap_L)
-                        local R_flapPosition = unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.Flap_R)
+                        local L_flapPosition = unit:getDrawArgumentValue(Config.Data['L-39C'].DrawArguementIDs.Flap_L)
+                        local R_flapPosition = unit:getDrawArgumentValue(Config.Data['L-39C'].DrawArguementIDs.Flap_R)
                         if (L_flapPosition > 0 and L_flapPosition < 1) and (R_flapPosition > 0 and R_flapPosition < 1) then
                             player.BeforeTakeOffCheckList[itemId].check = true
                         end
@@ -150,7 +150,7 @@ do
                     notice = false,
                     check = false,
                     func = function(player,unit,itemId)
-                        if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingLightID) > 0 then
+                        if unit:getDrawArgumentValue(Config.Data['L-39C'].DrawArguementIDs.LandingLightID) > 0 then
                             player.BeforeTakeOffCheckList[itemId].check = true
                         end
                     end,
@@ -165,8 +165,8 @@ do
                     notice = false,
                     check = false,
                     func = function(player,unit,itemId)
-                        local L_flapPosition = unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.Flap_L)
-                        local R_flapPosition = unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.Flap_R)
+                        local L_flapPosition = unit:getDrawArgumentValue(Config.Data['L-39C'].DrawArguementIDs.Flap_L)
+                        local R_flapPosition = unit:getDrawArgumentValue(Config.Data['L-39C'].DrawArguementIDs.Flap_R)
                         if L_flapPosition >= 0.8 and R_flapPosition >= 0.8 then
                             player.BeforeLandingCheckList[itemId].check = true
                         end
@@ -177,7 +177,7 @@ do
                     notice = false,
                     check = false,
                     func = function(player,unit,itemId)
-                        if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingLightID) > 0 then
+                        if unit:getDrawArgumentValue(Config.Data['L-39C'].DrawArguementIDs.LandingLightID) > 0 then
                             player.BeforeLandingCheckList[itemId].check = true
                         end
                     end,
@@ -187,9 +187,9 @@ do
                     notice = false,
                     check = false,
                     func = function(player,unit,itemId)
-                        local LandingGear_N = unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_N)
-                        local LandingGear_R = unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_R)
-                        local LandingGear_L = unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_L)
+                        local LandingGear_N = unit:getDrawArgumentValue(Config.Data['L-39C'].DrawArguementIDs.LandingGear_N)
+                        local LandingGear_R = unit:getDrawArgumentValue(Config.Data['L-39C'].DrawArguementIDs.LandingGear_R)
+                        local LandingGear_L = unit:getDrawArgumentValue(Config.Data['L-39C'].DrawArguementIDs.LandingGear_L)
                         if LandingGear_N > 0.5 and LandingGear_R > 0.5 and LandingGear_L > 0.5 then
                             player.BeforeLandingCheckList[itemId].check = true
                         end

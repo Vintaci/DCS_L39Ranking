@@ -4,6 +4,8 @@ local script_list =
 {
     -- Load order must be correct
     "mist_4_5_122.lua",
+    "Config.lua",
+    "Utils.lua",
     "RankingSystem.lua",
 }
 
@@ -12,7 +14,7 @@ local function load_scripts(path, list)
         -- dofile(path .. value)
         local status, result = pcall(dofile, path .. value)
         if not status then
-            dofile(lfs.writedir() .. "Missions\\Buta\\DCS_L39Ranking\\Scripts\\" .. value)
+            dofile(lfs.writedir() .. "Missions\\Scripts\\Buta\\DCS_L39Ranking\\Scripts\\" .. value)
         end
     end
 end
@@ -24,5 +26,5 @@ if lfs then
 else
     env.info("Script Loader: LFS not available, using default script load path: " .. script_path)
 end
-load_scripts(script_path, script_path)
+load_scripts(script_path, script_list)
 -- local status, result = pcall(load_scripts,script_path, script_path)

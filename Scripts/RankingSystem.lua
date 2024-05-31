@@ -139,6 +139,7 @@ do
         world.addEventHandler(ev)
 
         PlayerMonitor.allGroups[groupName] = obj
+        obj:start()
         return obj
     end
 
@@ -193,8 +194,8 @@ do
         
         local lines = centerLine.line
 
-        local LeftWheelPos = Utils.vecTranslate(unitPoint,heading-90,mist.utils.feetToMeters(Config.Data.L39C.LeftWheel))
-        local RightWheelPos = Utils.vecTranslate(unitPoint,heading+90,mist.utils.feetToMeters(Config.Data.L39C.RightWheel))
+        local LeftWheelPos = Utils.vecTranslate(unitPoint,heading-90,mist.utils.feetToMeters(Config.Data[self.type].LeftWheel))
+        local RightWheelPos = Utils.vecTranslate(unitPoint,heading+90,mist.utils.feetToMeters(Config.Data[self.type].RightWheel))
         
         for i=1,#lines-1 do
             local centerLine_Start = lines[i]
@@ -204,6 +205,49 @@ do
         end
 
         return false
+    end
+
+    function PlayerMonitor:validation()
+        local unit = self.unit
+        if not unit or unit:getLife() < 1 then return false end
+
+        local group = self.group
+        if not group or not group:getUnit(1) then return false end
+
+        return true
+    end
+
+    function PlayerMonitor:PerformCheckList(checkList,unit)
+        if checkList.finish then return true end
+        if not unit or not unit:isExist() or not unit.getDrawArgumentValue then return false end
+
+        local unitID = unit:getID()
+
+        local allDone = true
+        for itemId,item in ipairs(checkList) do
+            if not item.check then
+                allDone = false
+                if not item.notice then
+                    local msg = item.text
+                    trigger.action.outTextForUnit(unitID,msg,10)
+                    item.notice = true
+                end
+                
+                item.func(self,unit,itemId)
+                
+                if item.check then
+                    local msg = item.text..': 检查.'
+                    trigger.action.outTextForUnit(unitID,msg,10)
+                end
+
+                return allDone
+            end
+        end
+
+        if allDone then
+            checkList.finish = true
+        end
+        return allDone
     end
 
     function PlayerMonitor._MonitorFunc(vars,time)
@@ -324,9 +368,9 @@ do
                     self.penalties[self.stage]['climb'] = self.penalties[self.stage]['climb'] or {}
 
                     local gearUp = false
-                    if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_L) <= 0.85 or 
-                       unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_R) <= 0.85 or 
-                       unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_N) <= 0.85 
+                    if unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_L) <= 0.85 or 
+                       unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_R) <= 0.85 or 
+                       unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_N) <= 0.85 
                     then
                         gearUp = true
                     end
@@ -451,7 +495,7 @@ do
         --转换到滑行阶段
         if mist.pointInPolygon(unitPoint,Config.TaxiWays.TaxiWay) then
             local AGL = unitPoint.y - land.getHeight({x = unitPoint.x,y = unitPoint.z})
-            if AGL <= Config.Data.L39C.landAlt then
+            if AGL <= Config.Data[self.type].landAlt then
 
                 Utils.messageToAll('Enter Taxi') --Debug
 
@@ -512,7 +556,7 @@ do
             if mist.pointInPolygon(unitPoint,Config.RunWay[self.ActiveRunWay].entrance.HoldShort) then
                 local AGL = unitPoint.y
                 local Speed = math.floor(mist.utils.converter('mps','kmph',mist.vec.mag(unit:getVelocity())))
-                if AGL <= Config.Data.L39C.landAlt and Speed <= 10 then
+                if AGL <= Config.Data[self.type].landAlt and Speed <= 10 then
 
                     Utils.messageToAll('Enter HoldShort') --Debug
 
@@ -588,7 +632,7 @@ do
                 
                 self.penalties[self.stage]['lights'] = self.penalties[self.stage]['lights'] or {}
                 if Utils.getTbaleSize(self.penalties[self.stage]['lights']) <= 0 then
-                    if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.TaxiLightID) <= 0 then
+                    if unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.TaxiLightID) <= 0 then
                         local newPenalty = {
                             reason = '未正确使用灯光',
                             point = 1,
@@ -672,8 +716,9 @@ do
             self.penalties = self.penalties or {}
             self.penalties[self.stage] = self.penalties[self.stage] or {}
 
+            lastUpdateTime = self.penalties[self.stage].lastUpdateTime
             if not self.penalties[self.stage]['lights'] then
-                if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.TaxiLightID) <= 0 then
+                if unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.TaxiLightID) <= 0 then
                     local newPenalty = {
                         reason = '未正确使用灯光',
                         point = 1,
@@ -686,7 +731,7 @@ do
             end
 
             if timer.getTime() - lastUpdateTime >= 10 then
-                if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.Flap_L) <= 0 or unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.Flap_L) >= 0.9 then
+                if unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.Flap_L) <= 0 or unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.Flap_L) >= 0.9 then
                     local newPenalty = {
                         reason = '起飞、着陆未放襟翼',
                         point = 3,
@@ -763,10 +808,10 @@ do
             self.penalties = self.penalties or {}
             self.penalties[self.stage] = self.penalties[self.stage] or {}
 
-
+            lastUpdateTime = self.penalties[self.stage].lastUpdateTime
             if self.takeOffPoint then
                 if mist.utils.get2DDist(self.takeOffPoint,unitPoint) > 100 then  
-                    if unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_L) > 0.85 or unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_R) > 0.85 or unit:getDrawArgumentValue(Config.Data.L39C.DrawArguementIDs.LandingGear_N) then
+                    if unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_L) > 0.85 or unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_R) > 0.85 or unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_N) then
                         if timer.getTime() - lastUpdateTime >= 10 then
                             local newPenalty = {
                                 reason = '起飞 100 米后未收起落架',
