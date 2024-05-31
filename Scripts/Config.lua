@@ -11,11 +11,11 @@ do
         },
         ['BetaTaxiWay'] = {
             Polygon = mist.getGroupPoints('BetaTaxiPolygon-1'),
-            HoldShort = mist.getGroupPoints('AlphaTaxiHoldShortPolygon-1'),
+            HoldShort = mist.getGroupPoints('BetaTaxiHoldShortPolygon-1'),
         },
         ['CharleyTaxiWay'] = {
             Polygon = mist.getGroupPoints('CharleyTaxiPolygon-1'),
-            HoldShort = mist.getGroupPoints('AlphaTaxiHoldShortPolygon-1'),
+            HoldShort = mist.getGroupPoints('CharleyTaxiHoldShortPolygon-1'),
         },
         TaxiWay = mist.getGroupPoints('TaxiPolygon-1'),
         TaxiWay_Turn = mist.getGroupPoints('TaxiTurnPolygon-1'),
@@ -88,7 +88,7 @@ do
                 TailNumber_Tens = 31,
                 TailNumber_Ones = 32,
             },
-            landAlt = 1
+            landAlt = 1.42
         },
     }
 

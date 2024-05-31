@@ -12,6 +12,23 @@ do
         return size
     end
 
+    function Utils.deepCopyTable(t)
+        if type(t) ~= "table" then
+            return t
+        end
+        local mt = getmetatable(t)
+        local copy = {}
+        for k, v in pairs(t) do
+            if type(v) == "table" then
+                copy[k] = Utils.deepCopyTable(v)
+            else
+                copy[k] = v
+            end
+        end
+        setmetatable(copy, mt)
+        return copy
+    end
+
     function Utils.vecTranslate(vec3,rad,distance)
         local point = {x = vec3.x,y = vec3.z or vec3.y,}
         
