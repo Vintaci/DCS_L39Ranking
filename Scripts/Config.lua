@@ -2,7 +2,7 @@ Config = {}
 
 do
     Config.PlayerMonitor = {}
-    Config.PlayerMonitor.MonitorRepeatTime = 2
+    Config.PlayerMonitor.MonitorRepeatTime = 5
 
     Config.TaxiWays = {
         ['AlphaTaxiWay'] = {
@@ -40,6 +40,7 @@ do
             },
             entrance = Config.TaxiWays.AlphaTaxiWay,
             exit = Config.TaxiWays.CharleyTaxiWay,
+            LandingZonePolygon = mist.getGroupPoints('LandingZonePolygon_09-1'),
         },
         ['27'] = {
             heading = 87,
@@ -55,6 +56,7 @@ do
             },
             entrance = Config.TaxiWays.CharleyTaxiWay,
             exit = Config.TaxiWays.AlphaTaxiWay,
+            LandingZonePolygon = mist.getGroupPoints('LandingZonePolygon_27-1'),
         },
         RunwayPolygon = mist.getGroupPoints('RunwayPolygon-1'),
         Runway_Center = {
