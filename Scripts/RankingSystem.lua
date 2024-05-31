@@ -1,7 +1,9 @@
 --[[
     DONE: 将航向, 升降率, 滚转, 俯仰, 对齐中线检查单独放在Monitior检查, 状态变更只进行状态过渡和需要特殊检查数据的变更
 
-    TODO: 一边到五边的飞行数据检查和状态转换
+    DONE: 一边到五边的飞行数据检查和状态转换
+    TODO:showResults 函数修复bug(279行in pairs()传入number)
+
     TODO: 训练模式下的提示
     TODO: 接地后输出成绩
     TODO: 添加音频
@@ -272,11 +274,13 @@ do
 
         local msg = '本次五边成绩:\n'
         for stage,stageName in pairs(PlayerMonitor.Stage) do
-            msg = msg..StageNames_CN[stageName]..'\n'
-            for penaltyType, items in pairs(penalties[stageName]) do
-                msg = msg..'  '..penaltyType..'\n'
-                for i,item in ipairs(items) do
-                    msg = msg..'  '..i..'.[-'..item.point..']'..item.reason..'\n'
+            if penalties[stageName] then
+                msg = msg..StageNames_CN[stageName]..'\n'
+                for penaltyType, items in pairs(penalties[stageName]) do
+                    msg = msg..'  '..penaltyType..'\n'
+                    for i,item in ipairs(items) do
+                        msg = msg..'  '..i..'.[-'..item.point..']'..item.reason..'\n'
+                    end
                 end
             end
         end
@@ -503,7 +507,7 @@ do
             end
 
             if self.onClimbRate then
-                if climbRate < self.climbRateLimit then
+                if climbRate < self.decentRateLimit then
                     self.onClimbRate = false
 
                     --Add penalties
@@ -1082,17 +1086,26 @@ do
             ]]
 
             --转换到第四边
+            local RunWayPoint = {
+                ['09'] = Config.RunWay.Runway_Center.line[2],
+                ['27'] = Config.RunWay.Runway_Center.line[1],
+            }
             if not self:validation() then return nil end
 
             local absRoll = math.abs(self:getRoll())
             
-            local Heading = self.getHeading()
+            local Heading = self:getHeading()
             local NBDdirection = mist.utils.toDegree(Utils.getDirection(unitPoint,Config.RunWay[self.assignedRunway].NBD_Far)) + Heading
             if NBDdirection > 360 then
                 NBDdirection = NBDdirection - 360
             end
 
-            if NBDdirection >= 270 and absRoll >= 5 then
+            local distenceToRunway = mist.utils.get2DDist(unitPoint,RunWayPoint[self.assignedRunway]) --m
+            local distenceToNBD_Far = mist.utils.get2DDist(unitPoint,Config.RunWay[self.assignedRunway].NBD_Far) --m
+
+            Utils.messageToAll('distenceToRunway: '..distenceToRunway..' distenceToNBD_Far": '..distenceToNBD_Far..' NBDdirection: '..NBDdirection) --Debug
+
+            if distenceToRunway - distenceToNBD_Far > 0 and absRoll >= 5 then
                 Utils.messageToAll('Enter BaseLeg') --Debug
 
                 self.stage = PlayerMonitor.Stage.BaseLeg
@@ -1262,16 +1275,16 @@ do
                 z = unitPoint.z + unitVelocity.z*timeToLand,
             }
 
-            trigger.action.circleToAll(-1,1,estimateLandingPoint,10,{1,0,0,1},{1,0,0,0.5},1,false,"Debug - estimateVector") --Debug
+            -- trigger.action.circleToAll(-1,1000,estimateLandingPoint,10,{1,0,0,1},{1,0,0,0.5},1,false,"Debug - estimateVector") --Debug
 
             
-            if mist.pointInPolygon(estimateLandingPoint,Config.RunWay.RunwayPolygon) then
+            if mist.pointInPolygon(estimateLandingPoint,Config.RunWay.RunwayPolygon) or distenceToRunway < 7 then
                 Utils.messageToAll('Enter FinalApproach') --Debug
 
                 self.stage = PlayerMonitor.Stage.FinalApproach
                 self:setStandards({decent = -99})
 
-                if self.repeatTime > PlayerMonitor.MonitorRepeatTime then self.repeatTime = PlayerMonitor.MonitorRepeatTime end
+                if self.repeatTime > 1 then self.repeatTime = 1 end
                 return time+self.repeatTime
             end
 
@@ -1356,7 +1369,7 @@ do
                     self.context.penalties = self.context.penalties or {}
                     self.context.penalties[PlayerMonitor.Stage.TouchDown] = self.context.penalties[PlayerMonitor.Stage.TouchDown] or {}
 
-                    self.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] = self.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] or {}
+                    self.context.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] = self.context.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] or {}
                     if not self.context.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] then
                         if not PlayerMonitor.checkLineup(unit,landingPoint,Heading,Config.RunWay.Runway_Center) then
                             local newPenalty = {
@@ -1365,11 +1378,11 @@ do
                                 time = timer.getTime()
                             }
         
-                            table.insert(self.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'],newPenalty)
+                            table.insert(self.context.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'],newPenalty)
                         end
                     end
 
-                    self.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] = self.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] or {}
+                    self.context.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] = self.context.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] or {}
                     if not self.context.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] then
                         if not mist.pointInPolygon(landingPoint,Config.RunWay[self.context.assignedRunway].LandingZonePolygon) then
                             local newPenalty = {
@@ -1378,16 +1391,19 @@ do
                                 time = timer.getTime()
                             }
         
-                            table.insert(self.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'],newPenalty)
+                            table.insert(self.context.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'],newPenalty)
                         end
                     end
 
+                    if self.context.stage ~= PlayerMonitor.Stage.AfterTouchDown then
+                        timer.scheduleFunction(PlayerMonitor.showResults,self.context,timer.getTime()+10)
+                    end
+
                     Utils.messageToAll('Enter FinalApproach') --Debug
-                    PlayerMonitor.allPlayers[groupName].stage = PlayerMonitor.Stage.AfterTouchDown
+                    self.context.stage = PlayerMonitor.Stage.AfterTouchDown
                     self.context:setStandards({decent = -99})
 
                     if self.context.repeatTime ~= PlayerMonitor.MonitorRepeatTime then self.context.repeatTime = PlayerMonitor.MonitorRepeatTime end
-                    timer.scheduleFunction(PlayerMonitor.showResults,self.context,timer.getTime()+10)
 
                     world.removeEventHandler(self)
                 end
