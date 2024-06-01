@@ -856,6 +856,8 @@ do
                 self.stage = PlayerMonitor.Stage.BeforeTakeOff
 
                 self:setStandards({centerLine = Config.RunWay.Runway_Center})
+
+                if self.repeatTime < 5 then self.repeatTime = 5 end
                 return time+self.repeatTime
             end
 
@@ -887,7 +889,7 @@ do
                 self.stage = PlayerMonitor.Stage.Rolling
 
                 self:setStandards({pitchUpLimit = 10,climbRate = 8,centerLine = Config.RunWay.Runway_Center})
-                if self.repeatTime > 1 then self.repeatTime = 1 end
+                if self.repeatTime > 3 then self.repeatTime = 3 end
                 return time+self.repeatTime
             end
         end
@@ -907,34 +909,6 @@ do
 
                 状态转换: 离地建立正上升后转为爬升阶段
             ]]
-
-            --到起飞爬升阶段
-            -- local ev = {}
-            -- ev.context = self
-
-            -- function ev:onEvent(event)
-            --     if self.context.stage ~= PlayerMonitor.Stage.Climb then
-            --         if event.id == world.event.S_EVENT_TAKEOFF and event.initiator and event.initiator.getPlayerName then
-            --             local unit = event.initiator
-            --             if not unit then return end
-
-            --             local group = unit:getGroup()
-            --             if not group then return end
-
-            --             local groupName = group:getName()
-            --             if not groupName then return end    
-
-            --             self.context.takeOffPoint = unit:getPoint()
-                        
-            --             self.context.stage = PlayerMonitor.Stage.Climb
-            --             self.context:setStandards({heading = Config.RunWay[self.context.assignedRunway].heading,climbRate = 8,pitchUpLimit = 10})
-
-            --             if self.context.repeatTime ~= PlayerMonitor.MonitorRepeatTime then self.context.repeatTime = PlayerMonitor.MonitorRepeatTime end
-            --             world.removeEventHandler(self)
-            --         end
-            --     end
-            -- end
-            -- world.addEventHandler(ev)
 
             --扣分
             self.penalties = self.penalties or {}
@@ -1034,6 +1008,8 @@ do
                 self.stage = PlayerMonitor.Stage.UpwindLeg
                 
                 self:setStandards({heading = Config.RunWay[self.assignedRunway].heading,climbRate = 8})
+
+                if self.repeatTime < 3 then self.repeatTime = 3 end
                 return time+self.repeatTime
             end
 
@@ -1089,7 +1065,7 @@ do
                         self.stage = PlayerMonitor.Stage.CrosswindLeg
                         self:setStandards({roll = 30,climbRate = 8})
 
-                        if self.repeatTime > 1 then self.repeatTime = 1 end
+                        if self.repeatTime < 3 then self.repeatTime = 3 end
                         return time+self.repeatTime
                     end
                 end
@@ -1390,7 +1366,7 @@ do
                 self.stage = PlayerMonitor.Stage.FinalApproach
                 self:setStandards({decent = -99})
 
-                if self.repeatTime > 1 then self.repeatTime = 1 end
+                if self.repeatTime < 3 then self.repeatTime = 3 end
                 return time+self.repeatTime
             end
 
@@ -1452,68 +1428,6 @@ do
 
                 状态转换: 进入跑道范围后进入接地阶段.
             ]]
-
-            --转到接地
-            -- local ev = {}
-            -- ev.context = self
-
-            -- function ev:onEvent(event)
-            --     if event.id == world.event.S_EVENT_LAND and event.initiator and event.initiator.getPlayerName then
-            --         local unit = event.initiator
-            --         if not unit then return end
-
-            --         local group = unit:getGroup()
-            --         if not group then return end
-
-            --         local groupName = group:getName()
-            --         if not groupName then return end    
-
-            --         local landingPoint = unit:getPoint()
-            --         local Heading = self.context:getHeading()
-
-            --         self.context.penalties = self.context.penalties or {}
-            --         self.context.penalties[PlayerMonitor.Stage.TouchDown] = self.context.penalties[PlayerMonitor.Stage.TouchDown] or {}
-
-            --         if not self.context.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] then
-            --             if not PlayerMonitor.checkLineup(unit,landingPoint,Heading,Config.RunWay.Runway_Center) then
-            --                 local newPenalty = {
-            --                     reason = '着陆未在跑道中线',
-            --                     point = 35,
-            --                     time = timer.getTime()
-            --                 }
-        
-            --                 self.context.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] = self.context.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] or {}
-            --                 table.insert(self.context.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'],newPenalty)
-            --             end
-            --         end
-
-            --         if not self.context.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] then
-            --             if not mist.pointInPolygon(landingPoint,Config.RunWay[self.context.assignedRunway].LandingZonePolygon) then
-            --                 local newPenalty = {
-            --                     reason = '着陆超出接地区',
-            --                     point = 3,
-            --                     time = timer.getTime()
-            --                 }
-        
-            --                 self.context.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] = self.context.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] or {}
-            --                 table.insert(self.context.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'],newPenalty)
-            --             end
-            --         end
-
-            --         if self.context.stage ~= PlayerMonitor.Stage.AfterTouchDown then
-            --             timer.scheduleFunction(PlayerMonitor.showResults,self.context.groupName,timer.getTime()+10)
-            --         end
-
-            --         self.context.stage = PlayerMonitor.Stage.AfterTouchDown
-            --         self.context:setStandards({decent = -99})
-
-            --         if self.context.repeatTime ~= PlayerMonitor.MonitorRepeatTime then self.context.repeatTime = PlayerMonitor.MonitorRepeatTime end
-
-            --         world.removeEventHandler(self)
-            --     end
-            -- end
-
-            -- world.addEventHandler(ev)
 
             --扣分
             local RunWayPoint = {
