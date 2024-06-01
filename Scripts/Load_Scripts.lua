@@ -14,7 +14,10 @@ local function load_scripts(path, list)
         -- dofile(path .. value)
         local status, result = pcall(dofile, path .. value)
         if not status then
-            dofile(lfs.writedir() .. "Missions\\Scripts\\Buta\\DCS_L39Ranking\\Scripts\\" .. value)
+            status, result = pcall(dofile,lfs.writedir() .. "Missions\\Scripts\\Buta\\DCS_L39Ranking\\Scripts\\" .. value) --Golden server and my own computer
+            if not status then
+                status, result = pcall(dofile,lfs.writedir() .. "Missions\\Buta\\DCS_L39Ranking\\Scripts\\" .. value)--ER server
+            end
         end
     end
 end
