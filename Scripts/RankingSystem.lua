@@ -737,17 +737,19 @@ do
                     end
                 end
                 
-                if not self.penalties[self.stage]['lights'] then
-                    if unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.TaxiLightID) <= 0 then
-                        local newPenalty = {
-                            reason = '未正确使用灯光',
-                            point = 1,
-                            time = timer.getTime()
-                        }
+                if not self.BeforeTakeOffCheckList.finish then
+                    if not self.penalties[self.stage]['lights'] then
+                        if unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.TaxiLightID) <= 0 then
+                            local newPenalty = {
+                                reason = '未正确使用灯光',
+                                point = 1,
+                                time = timer.getTime()
+                            }
 
-                        self.penalties[self.stage]['lights'] = self.penalties[self.stage]['lights'] or {}
-                        table.insert(self.penalties[self.stage]['lights'],newPenalty)
-                        self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                            self.penalties[self.stage]['lights'] = self.penalties[self.stage]['lights'] or {}
+                            table.insert(self.penalties[self.stage]['lights'],newPenalty)
+                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                        end
                     end
                 end
             end
@@ -1414,9 +1416,7 @@ do
                         end
                     end
 
-                    if self.context.stage ~= PlayerMonitor.Stage.AfterTouchDown then
-                        timer.scheduleFunction(PlayerMonitor.showResults,self.context,timer.getTime()+10)
-                    end
+                    timer.scheduleFunction(PlayerMonitor.showResults,self.context,timer.getTime()+10)
 
                     self.context.stage = PlayerMonitor.Stage.AfterTouchDown
                     self.context:setStandards({decent = -99})
