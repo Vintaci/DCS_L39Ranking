@@ -2,10 +2,10 @@
     DONE: 将航向, 升降率, 滚转, 俯仰, 对齐中线检查单独放在Monitior检查, 状态变更只进行状态过渡和需要特殊检查数据的变更
 
     DONE: 一边到五边的飞行数据检查和状态转换
-    TODO: showResults 函数修复bug(279行in pairs()传入number)
+    DONE: showResults 函数修复bug(279行in pairs()传入number)
 
     TODO: 训练模式下的提示
-    TODO: 接地后输出成绩
+    DONE: 接地后输出成绩
     TODO: 添加音频
 
 ]]
@@ -43,6 +43,65 @@ do
         AfterTouchDown = 'AfterTouchDown'
     }
 
+    PlayerMonitor.SoundFiles = {
+        ['高度偏低了'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+        ['高度偏高了'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+        ['对正中线'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+        ['中线对歪了'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+        ['好, 现在对正中线了,看好中线位置'] = {
+            duration = 4, --Seconds
+            loop = false,
+        },
+        ['近台高度'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+        ['近台高度'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+        ['注意高度'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+        ['注意攻角'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+        ['注意滚转角度'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+        ['注意航向'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+        ['注意上升率'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+        ['注意速度'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+        ['注意下降率'] = {
+            duration = 1, --Seconds
+            loop = false,
+        },
+    }
+
     PlayerMonitor.allGroups = {}
 
     function PlayerMonitor:new(unit)
@@ -64,6 +123,8 @@ do
         obj.unit = unit
         obj.groupName = groupName
         obj.type = unit:getTypeName()
+
+        obj.trainingMod = true
 
         obj.stage = PlayerMonitor.Stage.BeforeTaxi
         obj.assignedRunway = Config.ActiveRunWay or '09'
@@ -196,7 +257,7 @@ do
         end
 
         world.addEventHandler(ev)
-
+        
         obj:start()
 
         return obj
@@ -373,10 +434,8 @@ do
                     msg = msg..StageNames_CN[stageName]..':\n'
                     for penaltyType, items in pairs(penalties[stageName]) do
                         if type(items) == 'table' then
-                            -- msg = msg..'  '..penaltyType..':\n'
                             for i,item in ipairs(items) do
                                 total = total - item.point
-                                -- msg = msg..'  '..i..'.[-'..item.point..']'..item.reason..'\n'
                                 msg = msg..'  '..'[-'..item.point..']'..item.reason..'\n'
                             end
                         end
@@ -385,7 +444,11 @@ do
             end
         end
 
-        msg = msg..'------- 总分: '..total..'分 -------\n'
+        msg = msg..'--------------\n'
+        msg = msg..string.format('远台高度: %d\n',object.NBDAlt_Far)
+        msg = msg..string.format('近台高度: %d\n',object.NBDAlt_Near)
+
+        msg = msg..'\n------- 总分: '..total..'分 -------\n'
         if total >= 28 then
             msg = msg..'------- 合格 -------'
         end
@@ -396,6 +459,7 @@ do
 
         trigger.action.outTextForUnit(unitID,msg,30)
 
+        Utils.messageToAll(msg)--Debug
         return nil
     end
 
@@ -454,6 +518,55 @@ do
         return math.deg(Roll)
     end
 
+    function PlayerMonitor:setTaskRadioTransmition(fileName,filePath,speaker)
+        Utils.messageToAll('setTaskRadioTransmition') --Debug
+
+        if not self:validation() then
+            Utils.messageToAll('setTaskRadioTransmition not validation!') --Debug
+            return nil
+        end
+
+        local unit = self.unit
+
+        local msg = { 
+            id = 'TransmitMessage', 
+            params = {
+                file = filePath..fileName..'.ogg',
+                duration = PlayerMonitor.SoundFiles[fileName].duration,
+                subtitle = speaker..': '..fileName,
+                loop = PlayerMonitor.SoundFiles[fileName].loop,
+            } 
+        }
+
+        -- unit:getController():setCommand(msg)
+        local controller = unit:getController()
+        controller:setCommand(msg)
+    end
+
+    function PlayerMonitor:playTalkVoice(fileName)
+        if not fileName then return end
+
+        local filePath = 'Voices/'
+        self:setTaskRadioTransmition(fileName,filePath,'教官')
+    end
+
+    function PlayerMonitor:stopRadioTransmition()
+        if not self:validation() then
+            Utils.messageToAll('stopRadioTransmition not validation!') --Debug
+            return nil
+        end
+
+        local unit = self.unit
+        local controller = unit:getController()
+
+        local stopTransmission= { 
+            id = 'stopTransmission', 
+            params = {} 
+        }
+
+        controller:setCommand(stopTransmission)
+    end
+
     function PlayerMonitor._MonitorFunc(vars,time)
         local self = vars.context
         
@@ -478,6 +591,12 @@ do
                     self.onCenterLine = true
 
                     --Other Logic
+                    local soundfiles =  {
+                        '好, 现在对正中线了,看好中线位置',
+                        '对正中线',
+                    }
+
+                    self:playTalkVoice(soundfiles[math.random(1,#soundfiles)])
                 end
             end
 
@@ -485,17 +604,27 @@ do
                 if not PlayerMonitor.checkLineup(unit,unitPoint,Heading,self.centerLine) then
                     self.onCenterLine = false
 
-                    --Add penalties
-                    if timer.getTime() - lastUpdateTime >= 10 then
-                        local newPenalty = {
-                            reason = '滑行、滑跑未压中线或偏离',
-                            point = 1,
-                            time = timer.getTime()
-                        }
+                    self:playTalkVoice('中线对歪了')
 
-                        self.penalties[self.stage]['lineUp'] = self.penalties[self.stage]['lineUp'] or {}
-                        table.insert(self.penalties[self.stage]['lineUp'],newPenalty)
-                        self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                    --Add penalties.
+                    self.penalties[self.stage]['lineUp'] = self.penalties[self.stage]['lineUp'] or {}
+                    local tbaleSize = Utils.getTbaleSize(self.penalties[self.stage]['lineUp'])
+                    if tbaleSize <= 2 then
+                        if timer.getTime() - lastUpdateTime >= 10 then
+                            local newPenalty = {
+                                reason = '滑行、滑跑未压中线或偏离',
+                                point = 1,
+                                time = timer.getTime()
+                            }
+
+                            if tbaleSize + 1 == 3 then
+                                newPenalty.reason = '滑行、滑跑未压中线或偏离三次'
+                                newPenalty.point = 5
+                            end
+
+                            table.insert(self.penalties[self.stage]['lineUp'],newPenalty)
+                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                        end
                     end
                 end
             end
@@ -516,6 +645,7 @@ do
             if self.onCourse then
                 if math.abs(Heading - self.headingLimit) > 3 then
                     self.onCourse = false
+                    self:playTalkVoice('注意航向')
 
                     --Add penalties
                     self.penalties[self.stage]['heading'] = self.penalties[self.stage]['heading'] or {}
@@ -553,6 +683,7 @@ do
             if self.onClimbRate then
                 if climbRate > self.climbRateLimit then
                     self.onClimbRate = false
+                    self:playTalkVoice('注意上升率')
 
                     --Add penalties
                     self.penalties[self.stage]['climb'] = self.penalties[self.stage]['climb'] or {}
@@ -614,6 +745,7 @@ do
             if self.onClimbRate then
                 if climbRate < self.decentRateLimit then
                     self.onClimbRate = false
+                    self:playTalkVoice('注意下降率')
 
                     --Add penalties
                     if climbRate > 0 then
@@ -652,6 +784,7 @@ do
                     self.onPitch = false
 
                     --Other Logic
+                    self:playTalkVoice('注意攻角')
                 end
             end
 
@@ -674,6 +807,7 @@ do
                     self.onRoll = false
 
                     --Other Logic
+                    self:playTalkVoice('注意滚转角度')
                 end
             end
 
@@ -1018,7 +1152,7 @@ do
 
             lastUpdateTime = self.penalties[self.stage].lastUpdateTime or timer.getTime() - 10
             if self.takeOffPoint then
-                if mist.utils.get2DDist(self.takeOffPoint,unitPoint) > 100 then
+                if AGL >= 100 then
                     if unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_L) > 0.85 or unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_R) > 0.85 or unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_N) then
                         if timer.getTime() - lastUpdateTime >= 10 then
                             local newPenalty = {
@@ -1130,6 +1264,9 @@ do
             if timer.getTime() - lastUpdateTime >= 10 then
                 local absRoll = math.abs(self:getRoll())
                 if absRoll > 30 then
+
+                    self:playTalkVoice('注意滚转角度')
+
                     local newPenalty = {
                         reason = '一转坡度>30° <45°',
                         point = 1,
@@ -1231,6 +1368,9 @@ do
                     if self.onSpeed then
                         if Speed <= 380 then
                             self.onSpeed = false
+                            self:playTalkVoice('注意速度')
+
+
                             self.penalties[self.stage]['speed'] = self.penalties[self.stage]['speed'] or {}
 
                             local newPenalty = {
@@ -1250,6 +1390,9 @@ do
 
                         if Speed >= 420 then
                             self.onSpeed = false
+                            self:playTalkVoice('注意速度')
+
+
                             self.penalties[self.stage]['speed'] = self.penalties[self.stage]['speed'] or {}
 
                             local newPenalty = {
@@ -1280,6 +1423,14 @@ do
                 if self.onAltitude then
                     if MSL <= 580 then
                         self.onAltitude = false
+
+                        local fileNames = {
+                            '注意高度',
+                            '高度偏低了',
+                        }
+
+                        self:playTalkVoice(fileNames[math.random(1,#fileNames)])
+
                         self.penalties[self.stage]['altitude'] = self.penalties[self.stage]['altitude'] or {}
 
                         local newPenalty = {
@@ -1299,6 +1450,14 @@ do
 
                     if MSL >= 620 then
                         self.onAltitude = false
+
+                        local fileNames = {
+                            '注意高度',
+                            '高度偏高了',
+                        }
+
+                        self:playTalkVoice(fileNames[math.random(1,#fileNames)])
+
                         self.penalties[self.stage]['altitude'] = self.penalties[self.stage]['altitude'] or {}
 
                         local newPenalty = {
@@ -1347,7 +1506,7 @@ do
             distenceToRunway = distenceToRunway/1000 --km
 
             local Speed = self:getSpeed() --km/h
-            local timeToLand = ((distenceToRunway/Speed)*3600)+5
+            local timeToLand = ((distenceToRunway/Speed)*3600)+1
 
             local estimateLandingPoint = {
                 x = unitPoint.x + unitVelocity.x*timeToLand,
@@ -1355,10 +1514,10 @@ do
                 z = unitPoint.z + unitVelocity.z*timeToLand,
             }
             --Debug
-            -- self.drawID = self.drawID or 1
-            -- trigger.action.removeMark(self.drawID)
-            -- self.drawID = self.drawID + 1
-            -- trigger.action.circleToAll(-1,self.drawID,estimateLandingPoint,50,{1,0,0,1},{1,0,0,0.5},1)
+            self.drawID = self.drawID or 1
+            trigger.action.removeMark(self.drawID)
+            self.drawID = self.drawID + 1
+            trigger.action.circleToAll(-1,self.drawID,estimateLandingPoint,20,{1,0,0,1},{1,0,0,0.5},1)
 
             if mist.pointInPolygon(estimateLandingPoint,Config.RunWay.RunwayPolygon) or distenceToRunway < 6 then
                 Utils.messageToAll('Enter FinalApproach') --Debug
@@ -1394,10 +1553,10 @@ do
             end
             
             if not self.penalties[self.stage]['lineUp'] then
-                if distenceToRunway <= 7 then
+                if distenceToRunway < 7 then
                     local newPenalty = {
-                        reason = '7公里未对正航向道',
-                        point = 3,
+                        reason = '7公里未对正航向道[-7 未扣除]',
+                        point = 0,
                         time = timer.getTime()
                     }
 
@@ -1511,6 +1670,7 @@ do
                         end
 
                         self.NBDAlt_Near = math.floor(AGL)
+                        trigger.action.outTextForUnit(unit:getID(),string.format('近台高度记录: %d', math.floor(AGL)),5)
                     end
                 end
 
@@ -1543,15 +1703,17 @@ do
                     end
                     
                     self.NBDAlt_Far = math.floor(AGL)
+                    trigger.action.outTextForUnit(unit:getID(),string.format('远台高度记录: %d', math.floor(AGL)),5)
                 end
             end
             
             if not self.NBDAlt_Far then
                 if not self.penalties[self.stage]['tooLowBeforeNBDFar'] then
-                    if self:getMSL() < 198 then
+                    local unitVelocity = unit:getVelocity()
+                    if self:getMSL() + unitVelocity.y*2 < 198 then
                         local newPenalty = {
-                            reason = string.format('远台前气压高度低于 200 米, 记录高度: %d', math.floor(self:getMSL())),
-                            point = 35,
+                            reason = string.format('远台前气压高度低于 200 米[-35 未扣除], 记录高度: %d', math.floor(self:getMSL())),
+                            point = 0,
                             time = timer.getTime()
                         }
 
