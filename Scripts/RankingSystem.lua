@@ -464,7 +464,7 @@ do
         end
 
         trigger.action.outTextForUnit(unitID,msg,30)
-        
+
         return nil
     end
 
@@ -718,18 +718,18 @@ do
                         self.penalties[self.stage]['speed'] = self.penalties[self.stage]['speed'] or {}
 
                         local newPenalty = {
-                            reason = string.format('滑行速度超限≤25%(限速:%d km/h, 记录时: %d km/h)',speedLimit, math.floor(speedKmph)),
+                            reason = '滑行速度超限≤25% (限速: '..speedLimit..' km/h, 记录时: '..math.floor(speedKmph)..' km/h)',
                             point = 1,
                             time = timer.getTime()
                         }
 
                         if (speedKmph - speedLimit ) >= speedLimit*(1+0.25) and (speedKmph - speedLimit ) <= speedLimit*(1+0.5) then
-                            newPenalty.reason = string.format('滑行速度超限25%~50%(限速:%d km/h, 记录时: %d km/h)',speedLimit, math.floor(speedKmph))
+                            newPenalty.reason = '滑行速度超限25%~50% (限速: '..speedLimit..' km/h, 记录时: '..math.floor(speedKmph)..' km/h)'
                             newPenalty.point = 2
                         end
 
                         if (speedKmph - speedLimit ) >= speedLimit*(1+0.5) then
-                            newPenalty.reason = string.format('滑行速度超限≥50%(限速:%d km/h, 记录时: %d km/h)',speedLimit, math.floor(speedKmph))
+                            newPenalty.reason = '滑行速度超限≥50% (限速: '..speedLimit..' km/h, 记录时: '..math.floor(speedKmph)..' km/h)'
                             newPenalty.point = 5
                         end
 
