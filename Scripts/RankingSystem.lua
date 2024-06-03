@@ -4,9 +4,11 @@
     DONE: 一边到五边的飞行数据检查和状态转换
     DONE: showResults 函数修复bug(279行in pairs()传入number)
 
-    TODO: 训练模式下的提示
+    DONE: 训练模式下的提示
     DONE: 接地后输出成绩
-    TODO: 添加音频
+    DONE: 添加音频
+
+    TODO: 跑道入口高度15m提示
 
 ]]
 
@@ -45,58 +47,62 @@ do
 
     PlayerMonitor.SoundFiles = {
         ['高度偏低了'] = {
+            file = 'Altitude_Low.ogg',
             duration = 1, --Seconds
             loop = false,
         },
         ['高度偏高了'] = {
+            file = 'Altitude_High.ogg',
             duration = 1, --Seconds
             loop = false,
         },
         ['对正中线'] = {
-            duration = 1, --Seconds
-            loop = false,
-        },
-        ['中线对歪了'] = {
+            file = 'lineUp_Short.ogg',
             duration = 1, --Seconds
             loop = false,
         },
         ['好, 现在对正中线了,看好中线位置'] = {
+            file = 'lineUp_Long.ogg',
             duration = 4, --Seconds
             loop = false,
         },
-        ['近台高度'] = {
-            duration = 1, --Seconds
-            loop = false,
-        },
-        ['近台高度'] = {
+        ['中线对歪了'] = {
+            file = 'notLineUp.ogg',
             duration = 1, --Seconds
             loop = false,
         },
         ['注意高度'] = {
+            file = 'Altitude.ogg',
             duration = 1, --Seconds
             loop = false,
         },
         ['注意攻角'] = {
+            file = 'AoA.ogg',
             duration = 1, --Seconds
             loop = false,
         },
         ['注意滚转角度'] = {
+            file = 'roll.ogg',
             duration = 1, --Seconds
             loop = false,
         },
         ['注意航向'] = {
+            file = 'heading.ogg',
             duration = 1, --Seconds
             loop = false,
         },
         ['注意上升率'] = {
+            file = 'climbRate.ogg',
             duration = 1, --Seconds
             loop = false,
         },
         ['注意速度'] = {
+            file = 'speed.ogg',
             duration = 1, --Seconds
             loop = false,
         },
         ['注意下降率'] = {
+            file = 'decentRate.ogg',
             duration = 1, --Seconds
             loop = false,
         },
@@ -518,36 +524,50 @@ do
         return math.deg(Roll)
     end
 
-    function PlayerMonitor:setTaskRadioTransmition(fileName,filePath,speaker)
+    function PlayerMonitor:setTaskRadioTransmition(subtitle,filePath,speaker)
         Utils.messageToAll('setTaskRadioTransmition') --Debug
 
         if not self:validation() then
             Utils.messageToAll('setTaskRadioTransmition not validation!') --Debug
-            return nil
+            return
         end
 
         local unit = self.unit
 
+        -- local SetFrequency = { 
+        --     id = 'SetFrequency', 
+        --     params = { 
+        --       frequency = 305*1000000, 
+        --       modulation = 0, 
+        --       power = 10, 
+        --     } 
+        -- }
+        -- unit:getController():setCommand(SetFrequency)
+
+        local file = filePath..PlayerMonitor.SoundFiles[subtitle].file
+        local duration = PlayerMonitor.SoundFiles[subtitle].duration
+        local subtitle = speaker..': '..subtitle
+
         local msg = { 
             id = 'TransmitMessage', 
             params = {
-                file = filePath..fileName..'.ogg',
-                duration = PlayerMonitor.SoundFiles[fileName].duration,
-                subtitle = speaker..': '..fileName,
-                loop = PlayerMonitor.SoundFiles[fileName].loop,
-            } 
+              duration = duration,
+              subtitle = subtitle,
+              loop = false,
+              file = file,
+            }  
         }
 
-        -- unit:getController():setCommand(msg)
-        local controller = unit:getController()
-        controller:setCommand(msg)
+        unit:getController():setCommand(msg)
+        -- local controller = unit:getController()
+        -- controller:setCommand(msg)
     end
 
-    function PlayerMonitor:playTalkVoice(fileName)
-        if not fileName then return end
+    function PlayerMonitor:playTalkVoice(subtitle,speaker)
+        if not subtitle then return end
 
         local filePath = 'Voices/'
-        self:setTaskRadioTransmition(fileName,filePath,'教官')
+        self:setTaskRadioTransmition(subtitle,filePath,speaker)
     end
 
     function PlayerMonitor:stopRadioTransmition()
@@ -576,242 +596,6 @@ do
 
         local unit = self.unit
         local unitPoint = unit:getPoint()
-
-        
-        self.penalties = self.penalties or {}
-        self.penalties[self.stage] = self.penalties[self.stage] or {}
-        local lastUpdateTime = self.penalties[self.stage].lastUpdateTime or timer.getTime() - 10
-
-        if self.centerLine then
-
-            local Heading = self:getHeading()
-
-            if not self.onCenterLine then
-                if PlayerMonitor.checkLineup(unit,unitPoint,Heading,self.centerLine) then
-                    self.onCenterLine = true
-
-                    --Other Logic
-                    local soundfiles =  {
-                        '好, 现在对正中线了,看好中线位置',
-                        '对正中线',
-                    }
-
-                    self:playTalkVoice(soundfiles[math.random(1,#soundfiles)])
-                end
-            end
-
-            if self.onCenterLine then
-                if not PlayerMonitor.checkLineup(unit,unitPoint,Heading,self.centerLine) then
-                    self.onCenterLine = false
-
-                    self:playTalkVoice('中线对歪了')
-
-                    --Add penalties.
-                    self.penalties[self.stage]['lineUp'] = self.penalties[self.stage]['lineUp'] or {}
-                    local tbaleSize = Utils.getTbaleSize(self.penalties[self.stage]['lineUp'])
-                    if tbaleSize <= 2 then
-                        if timer.getTime() - lastUpdateTime >= 10 then
-                            local newPenalty = {
-                                reason = '滑行、滑跑未压中线或偏离',
-                                point = 1,
-                                time = timer.getTime()
-                            }
-
-                            if tbaleSize + 1 == 3 then
-                                newPenalty.reason = '滑行、滑跑未压中线或偏离三次'
-                                newPenalty.point = 5
-                            end
-
-                            table.insert(self.penalties[self.stage]['lineUp'],newPenalty)
-                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
-                        end
-                    end
-                end
-            end
-
-        end
-
-        if self.headingLimit then
-            local Heading = self:getHeading()
-
-            if not self.onCourse then
-                if math.abs(Heading - self.headingLimit) <= 3 then
-                    self.onCourse = true
-
-                    --Other Logic
-                end
-            end
-
-            if self.onCourse then
-                if math.abs(Heading - self.headingLimit) > 3 then
-                    self.onCourse = false
-                    self:playTalkVoice('注意航向')
-
-                    --Add penalties
-                    self.penalties[self.stage]['heading'] = self.penalties[self.stage]['heading'] or {}
-
-                    if timer.getTime() - lastUpdateTime >= 10 then
-                        local newPenalty = {
-                            reason ='航向偏移',
-                            point = 1,
-                            time = timer.getTime()
-                        }
-                        if math.abs(Heading - self.headingLimit) > 5 then
-                            newPenalty.point = 2
-                        end
-
-                        table.insert(self.penalties[self.stage]['heading'],newPenalty)
-                        self.penalties[self.stage].lastUpdateTime = timer.getTime()
-                    end
-                end
-            end
-
-        end
-
-        if self.climbRateLimit then
-            
-            local velocity = unit:getVelocity()
-            local climbRate = velocity.y
-            if not self.onClimbRate then
-                if climbRate < self.climbRateLimit then
-                    self.onClimbRate = true
-
-                    --Other Logic
-                end
-            end
-
-            if self.onClimbRate then
-                if climbRate > self.climbRateLimit then
-                    self.onClimbRate = false
-                    self:playTalkVoice('注意上升率')
-
-                    --Add penalties
-                    self.penalties[self.stage]['climb'] = self.penalties[self.stage]['climb'] or {}
-
-                    local gearUp = false
-                    if unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_L) <= 0.85 or 
-                       unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_R) <= 0.85 or 
-                       unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_N) <= 0.85 
-                    then
-                        gearUp = true
-                    end
-
-                    if not gearUp then
-                        if climbRate < 0 then
-                            if timer.getTime() - lastUpdateTime >= 10 then
-                                local newPenalty = {
-                                    reason ='起飞松杆出现掉高',
-                                    point = 3,
-                                    time = timer.getTime()
-                                }
-    
-                                table.insert(self.penalties[self.stage]['climb'],newPenalty)
-                                self.penalties[self.stage].lastUpdateTime = timer.getTime()
-                            end
-                        end
-                    end
-
-                    if gearUp then
-                        if climbRate < 0 then
-                            if timer.getTime() - lastUpdateTime >= 10 then
-                                local newPenalty = {
-                                    reason ='爬升中垂直速率为负',
-                                    point = 35,
-                                    time = timer.getTime()
-                                }
-
-                                table.insert(self.penalties[self.stage]['climb'],newPenalty)
-                                self.penalties[self.stage].lastUpdateTime = timer.getTime()
-                            end
-                        end
-                    end
-                end
-            end
-
-        end
-
-        if self.decentRateLimit then
-            
-            local velocity = unit:getVelocity()
-            local climbRate = velocity.y
-            if not self.onClimbRate then
-                if climbRate > self.decentRateLimit then
-                    self.onClimbRate = true
-
-                    --Other Logic
-                end
-            end
-
-            if self.onClimbRate then
-                if climbRate < self.decentRateLimit then
-                    self.onClimbRate = false
-                    self:playTalkVoice('注意下降率')
-
-                    --Add penalties
-                    if climbRate > 0 then
-                        self.penalties[self.stage]['decent'] = self.penalties[self.stage]['decent'] or {}
-
-                        if Utils.getTbaleSize(self.penalties[self.stage]['decent']) <= 0  then
-                            local newPenalty = {
-                                reason ='下高出现上升',
-                                point = 35,
-                                time = timer.getTime()
-                            }
-
-                            table.insert(self.penalties[self.stage]['decent'],newPenalty)
-                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
-                        end
-                    end
-                end
-            end
-
-        end
-
-        if self.pitchUpLimit then
-
-            local unitpos = unit:getPosition()
-            local Pitch = math.deg(math.asin(unitpos.x.y))
-            if not self.onPitch then
-                if Pitch < self.pitchUpLimit then
-                    self.onPitch = true
-
-                    --Other Logic
-                end
-            end
-
-            if self.onPitch then
-                if Pitch > self.pitchUpLimit then
-                    self.onPitch = false
-
-                    --Other Logic
-                    self:playTalkVoice('注意攻角')
-                end
-            end
-
-        end
-
-        if self.rollLimit then
-
-            local absRoll = math.abs(self:getRoll())
-
-            if not self.onRoll then
-                if absRoll < self.rollLimit then
-                    self.onRoll = true
-
-                    --Other Logic
-                end
-            end
-
-            if self.onRoll then
-                if absRoll > self.rollLimit then
-                    self.onRoll = false
-
-                    --Other Logic
-                    self:playTalkVoice('注意滚转角度')
-                end
-            end
-
-        end
         
         --转换到滑行阶段
         if self.stage ~= PlayerMonitor.Stage.Taxing then
@@ -1265,7 +1049,7 @@ do
                 local absRoll = math.abs(self:getRoll())
                 if absRoll > 30 then
 
-                    self:playTalkVoice('注意滚转角度')
+                    self:playTalkVoice('注意滚转角度','教官')
 
                     local newPenalty = {
                         reason = '一转坡度>30° <45°',
@@ -1328,7 +1112,7 @@ do
                 self.stage = PlayerMonitor.Stage.BaseLeg
                 self:setStandards({decent = -99})
 
-                if self.repeatTime > 3 then self.repeatTime = 3 end
+                if self.repeatTime > 1 then self.repeatTime = 1 end
                 return time+self.repeatTime
             end
 
@@ -1368,7 +1152,7 @@ do
                     if self.onSpeed then
                         if Speed <= 380 then
                             self.onSpeed = false
-                            self:playTalkVoice('注意速度')
+                            self:playTalkVoice('注意速度','教官')
 
 
                             self.penalties[self.stage]['speed'] = self.penalties[self.stage]['speed'] or {}
@@ -1390,7 +1174,7 @@ do
 
                         if Speed >= 420 then
                             self.onSpeed = false
-                            self:playTalkVoice('注意速度')
+                            self:playTalkVoice('注意速度','教官')
 
 
                             self.penalties[self.stage]['speed'] = self.penalties[self.stage]['speed'] or {}
@@ -1429,7 +1213,7 @@ do
                             '高度偏低了',
                         }
 
-                        self:playTalkVoice(fileNames[math.random(1,#fileNames)])
+                        self:playTalkVoice(fileNames[math.random(1,#fileNames)],'教官')
 
                         self.penalties[self.stage]['altitude'] = self.penalties[self.stage]['altitude'] or {}
 
@@ -1456,7 +1240,7 @@ do
                             '高度偏高了',
                         }
 
-                        self:playTalkVoice(fileNames[math.random(1,#fileNames)])
+                        self:playTalkVoice(fileNames[math.random(1,#fileNames)],'教官')
 
                         self.penalties[self.stage]['altitude'] = self.penalties[self.stage]['altitude'] or {}
 
@@ -1525,7 +1309,7 @@ do
                 self.stage = PlayerMonitor.Stage.FinalApproach
                 self:setStandards({decent = -99})
 
-                if self.repeatTime < 3 then self.repeatTime = 3 end
+                if self.repeatTime > 1 then self.repeatTime = 1 end
                 return time+self.repeatTime
             end
 
@@ -1709,8 +1493,7 @@ do
             
             if not self.NBDAlt_Far then
                 if not self.penalties[self.stage]['tooLowBeforeNBDFar'] then
-                    local unitVelocity = unit:getVelocity()
-                    if self:getMSL() + unitVelocity.y*2 < 198 then
+                    if self:getMSL() < 198 then
                         local newPenalty = {
                             reason = string.format('远台前气压高度低于 200 米[-35 未扣除], 记录高度: %d', math.floor(self:getMSL())),
                             point = 0,
@@ -1781,6 +1564,257 @@ do
                 4.保持跑道航向
                 5.姿态稳定后联系 ATC 告知已复飞听从指示
             ]]
+        end
+
+        self.penalties = self.penalties or {}
+        self.penalties[self.stage] = self.penalties[self.stage] or {}
+        local lastUpdateTime = self.penalties[self.stage].lastUpdateTime or timer.getTime() - 10
+
+        if self.centerLine then
+
+            local Heading = self:getHeading()
+
+            if not self.onCenterLine then
+                if PlayerMonitor.checkLineup(unit,unitPoint,Heading,self.centerLine) then
+                    self.onCenterLine = true
+
+                    --Other Logic
+                    local soundfiles =  {
+                        '好, 现在对正中线了,看好中线位置',
+                        '对正中线',
+                    }
+
+                    self:playTalkVoice(soundfiles[math.random(1,#soundfiles)],'教官')
+                end
+            end
+
+            if self.onCenterLine then
+                if not PlayerMonitor.checkLineup(unit,unitPoint,Heading,self.centerLine) then
+                    self.onCenterLine = false
+
+                    self:playTalkVoice('中线对歪了','教官')
+
+                    --Add penalties.
+                    self.penalties[self.stage]['lineUp'] = self.penalties[self.stage]['lineUp'] or {}
+                    local tbaleSize = Utils.getTbaleSize(self.penalties[self.stage]['lineUp'])
+                    if tbaleSize <= 2 then
+                        if timer.getTime() - lastUpdateTime >= 10 then
+                            local newPenalty = {
+                                reason = '滑行、滑跑未压中线或偏离',
+                                point = 1,
+                                time = timer.getTime()
+                            }
+
+                            if tbaleSize + 1 == 3 then
+                                newPenalty.reason = '滑行、滑跑未压中线或偏离三次'
+                                newPenalty.point = 5
+                            end
+
+                            table.insert(self.penalties[self.stage]['lineUp'],newPenalty)
+                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                        end
+                    end
+                end
+            end
+
+        end
+
+        if self.headingLimit then
+            local Heading = self:getHeading()
+
+            if not self.onCourse then
+                if math.abs(Heading - self.headingLimit) <= 3 then
+                    self.onCourse = true
+
+                    --Other Logic
+                end
+            end
+
+            if self.onCourse then
+                if math.abs(Heading - self.headingLimit) > 3 then
+                    self.onCourse = false
+                    self:playTalkVoice('注意航向','教官')
+
+                    --Add penalties
+                    self.penalties[self.stage]['heading'] = self.penalties[self.stage]['heading'] or {}
+
+                    if timer.getTime() - lastUpdateTime >= 10 then
+                        local newPenalty = {
+                            reason ='航向偏移',
+                            point = 1,
+                            time = timer.getTime()
+                        }
+                        if math.abs(Heading - self.headingLimit) > 5 then
+                            newPenalty.point = 2
+                        end
+
+                        table.insert(self.penalties[self.stage]['heading'],newPenalty)
+                        self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                    end
+                end
+            end
+
+        end
+
+        if self.climbRateLimit then
+            
+            local velocity = unit:getVelocity()
+            local climbRate = velocity.y
+            if not self.onClimbRate then
+                if climbRate < self.climbRateLimit then
+                    self.onClimbRate = true
+
+                    --Other Logic
+                end
+            end
+
+            if self.onClimbRate then
+                if climbRate > self.climbRateLimit then
+                    self.onClimbRate = false
+                    self:playTalkVoice('注意上升率','教官')
+
+                    --Add penalties
+                    self.penalties[self.stage]['climb'] = self.penalties[self.stage]['climb'] or {}
+
+                    if timer.getTime() - lastUpdateTime >= 10 then
+                        local newPenalty = {
+                            reason = string.format('起飞起飞上升率超过8m/s, 记录: %d',math.floor(climbRate)),
+                            point = 0,
+                            time = timer.getTime()
+                        }
+
+                        table.insert(self.penalties[self.stage]['climb'],newPenalty)
+                        self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                    end
+                end
+
+                if climbRate < 0 then
+                    self.onClimbRate = false
+                    self:playTalkVoice('注意上升率','教官')
+
+                    
+                    --Add penalties
+                    self.penalties[self.stage]['climb'] = self.penalties[self.stage]['climb'] or {}
+
+                    local gearUp = false
+                    if unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_L) <= 0.85 or 
+                        unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_R) <= 0.85 or 
+                        unit:getDrawArgumentValue(Config.Data[self.type].DrawArguementIDs.LandingGear_N) <= 0.85 
+                    then
+                        gearUp = true
+                    end
+
+                    if not gearUp then
+                        if timer.getTime() - lastUpdateTime >= 10 then
+                            local newPenalty = {
+                                reason ='起飞松杆出现掉高',
+                                point = 3,
+                                time = timer.getTime()
+                            }
+
+                            table.insert(self.penalties[self.stage]['climb'],newPenalty)
+                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                        end
+                    end
+
+                    if gearUp then
+                            if timer.getTime() - lastUpdateTime >= 10 then
+                            local newPenalty = {
+                                reason ='爬升中垂直速率为负',
+                                point = 35,
+                                time = timer.getTime()
+                            }
+
+                            table.insert(self.penalties[self.stage]['climb'],newPenalty)
+                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                        end
+                    end
+                end
+            end
+
+        end
+
+        if self.decentRateLimit then
+            
+            local velocity = unit:getVelocity()
+            local climbRate = velocity.y
+            if not self.onClimbRate then
+                if climbRate > self.decentRateLimit then
+                    self.onClimbRate = true
+
+                    --Other Logic
+                end
+            end
+
+            if self.onClimbRate then
+                if climbRate < self.decentRateLimit then
+                    self.onClimbRate = false
+                    self:playTalkVoice('注意下降率','教官')
+
+                    --Add penalties
+                    if climbRate > 0 then
+                        self.penalties[self.stage]['decent'] = self.penalties[self.stage]['decent'] or {}
+
+                        if Utils.getTbaleSize(self.penalties[self.stage]['decent']) <= 0  then
+                            local newPenalty = {
+                                reason ='下高出现上升',
+                                point = 35,
+                                time = timer.getTime()
+                            }
+
+                            table.insert(self.penalties[self.stage]['decent'],newPenalty)
+                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                        end
+                    end
+                end
+            end
+
+        end
+
+        if self.pitchUpLimit then
+
+            local unitpos = unit:getPosition()
+            local Pitch = math.deg(math.asin(unitpos.x.y))
+            if not self.onPitch then
+                if Pitch < self.pitchUpLimit then
+                    self.onPitch = true
+
+                    --Other Logic
+                end
+            end
+
+            if self.onPitch then
+                if Pitch > self.pitchUpLimit then
+                    self.onPitch = false
+
+                    --Other Logic
+                    self:playTalkVoice('注意攻角','教官')
+                end
+            end
+
+        end
+
+        if self.rollLimit then
+
+            local absRoll = math.abs(self:getRoll())
+
+            if not self.onRoll then
+                if absRoll < self.rollLimit then
+                    self.onRoll = true
+
+                    --Other Logic
+                end
+            end
+
+            if self.onRoll then
+                if absRoll > self.rollLimit then
+                    self.onRoll = false
+
+                    --Other Logic
+                    self:playTalkVoice('注意滚转角度','教官')
+                end
+            end
+
         end
 
         return time+self.repeatTime
