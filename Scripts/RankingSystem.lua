@@ -1028,13 +1028,14 @@ do
             local Heading = self:getHeading()
             local MSL = self:getMSL()
             if MSL > 580 then
+                self:setStandards({roll = 30})
                 if math.abs(Heading - CrosswindLegHeading[self.assignedRunway]) < 5 then
                     Utils.messageToAll('Enter DownwindLeg') --Debug
 
                     self.stage = PlayerMonitor.Stage.DownwindLeg
                     self:setStandards({heading = CrosswindLegHeading[self.assignedRunway]})
 
-                    if self.repeatTime < 10 then self.repeatTime = 10 end
+                    self.repeatTime = 10
                     return time+self.repeatTime
                 end
             end
@@ -1110,7 +1111,7 @@ do
                 self.stage = PlayerMonitor.Stage.BaseLeg
                 self:setStandards({decent = -99})
 
-                if self.repeatTime > 1 then self.repeatTime = 1 end
+                self.repeatTime = 1
                 return time+self.repeatTime
             end
 
@@ -1307,7 +1308,7 @@ do
                 self.stage = PlayerMonitor.Stage.FinalApproach
                 self:setStandards({decent = -99})
 
-                if self.repeatTime > 1 then self.repeatTime = 1 end
+                self.repeatTime = 1
                 return time+self.repeatTime
             end
 
@@ -1337,7 +1338,7 @@ do
             if not self.penalties[self.stage]['lineUp'] then
                 if distenceToRunway < 7 then
                     local newPenalty = {
-                        reason = '7公里未对正航向道[-7 未扣除]',
+                        reason = '7公里未对正航向道[-3 未扣除]',
                         point = 0,
                         time = timer.getTime()
                     }
@@ -1831,7 +1832,10 @@ do
     
     function PlayerMonitor:stop()
         if not self.MonitorID then return end
-        timer.removeFunction(self.MonitorID)
-        self.MonitorID = nil
+        local status, result = pcall(timer.removeFunction,self.MonitorID)
+        
+        if status then
+            self.MonitorID = nil
+        end
     end
 end
