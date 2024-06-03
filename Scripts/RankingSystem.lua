@@ -464,8 +464,7 @@ do
         end
 
         trigger.action.outTextForUnit(unitID,msg,30)
-
-        Utils.messageToAll(msg)--Debug
+        
         return nil
     end
 
