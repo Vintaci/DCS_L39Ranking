@@ -524,8 +524,7 @@ do
     end
 
     function PlayerMonitor:setTaskRadioTransmition(subtitle,filePath,speaker)
-        Utils.messageToAll('setTaskRadioTransmition') --Debug
-
+        
         if not self:validation() then
             Utils.messageToAll('setTaskRadioTransmition not validation!') --Debug
             return
