@@ -8,7 +8,7 @@
     DONE: 接地后输出成绩
     DONE: 添加音频
 
-    TODO: 跑道入口高度15m提示
+    DONE: 跑道入口高度15m提示
 
 ]]
 
@@ -202,13 +202,16 @@ do
                 local groupName = group:getName()
                 if not groupName then return end    
 
-                if PlayerMonitor.allGroups[groupName].stage ~= PlayerMonitor.Stage.Climb then
-                    PlayerMonitor.allGroups[groupName].takeOffPoint = unit:getPoint()
-                    
-                    PlayerMonitor.allGroups[groupName].stage = PlayerMonitor.Stage.Climb
-                    PlayerMonitor.allGroups[groupName]:setStandards({heading = Config.RunWay[PlayerMonitor.allGroups[groupName].assignedRunway].heading,climbRate = 8,pitchUpLimit = 10})
+                local playerMonitorObj = PlayerMonitor.allGroups[groupName]
+                if not playerMonitorObj:validation() then return end
 
-                    if PlayerMonitor.allGroups[groupName].repeatTime ~= PlayerMonitor.MonitorRepeatTime then PlayerMonitor.allGroups[groupName].repeatTime = PlayerMonitor.MonitorRepeatTime end
+                if playerMonitorObj.stage ~= PlayerMonitor.Stage.Climb then
+                    playerMonitorObj.takeOffPoint = unit:getPoint()
+                    
+                    playerMonitorObj.stage = PlayerMonitor.Stage.Climb
+                    playerMonitorObj:setStandards({heading = Config.RunWay[playerMonitorObj.assignedRunway].heading,climbRate = 8,pitchUpLimit = 10})
+
+                    playerMonitorObj.repeatTime = PlayerMonitor.MonitorRepeatTime
                 end
             end
 
@@ -241,6 +244,8 @@ do
     
                         playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] = playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] or {}
                         table.insert(playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'],newPenalty)
+                        
+                        playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown].lastUpdateTime = timer.getTime()
                     end
                 end
 
@@ -254,17 +259,22 @@ do
     
                         playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] = playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] or {}
                         table.insert(playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'],newPenalty)
+
+                        playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown].lastUpdateTime = timer.getTime()
                     end
                 end
 
                 if playerMonitorObj.stage ~= PlayerMonitor.Stage.AfterTouchDown then
-                    timer.scheduleFunction(PlayerMonitor.showResults,groupName,timer.getTime()+10)
+
+                    playerMonitorObj.stage = PlayerMonitor.Stage.AfterTouchDown
+                    playerMonitorObj:setStandards({decent = -99,centerLine = Config.RunWay.Runway_Center})
+
+                    trigger.action.outTextForUnit(unit:getID(),'等待10秒后结算成绩...',9,false)
+                    timer.scheduleFunction(PlayerMonitor.showResults,{context = playerMonitorObj},timer.getTime()+10)
+                    
+                    playerMonitorObj.repeatTime = PlayerMonitor.MonitorRepeatTime
                 end
 
-                playerMonitorObj.stage = PlayerMonitor.Stage.AfterTouchDown
-                playerMonitorObj:setStandards({decent = -99,centerLine = Config.RunWay.Runway_Center})
-
-                if playerMonitorObj.repeatTime ~= PlayerMonitor.MonitorRepeatTime then playerMonitorObj.repeatTime = PlayerMonitor.MonitorRepeatTime end
             end
         end
 
@@ -401,18 +411,19 @@ do
         return allDone
     end
 
-    function PlayerMonitor.showResults(groupName,time)
+    function PlayerMonitor.showResults(vars)
 
-        local object = PlayerMonitor.allGroups[groupName]
+        local object = vars.context
         if not object then return nil end
+
+        local penalties = object.penalties or {}
+        if Utils.getTbaleSize(penalties) < 1 then return nil end
 
         if not object:validation() then return nil end
 
         local unitID = object.unit:getID()
         if not unitID then return nil end
 
-        local penalties = object.penalties or {}
-        if Utils.getTbaleSize(penalties) < 1 then return nil end
 
         local StageNames_CN = {
             [PlayerMonitor.Stage.BeforeTaxi] = '滑行前准备',
@@ -432,19 +443,29 @@ do
 
         local total = 35
 
-        table.sort(penalties,function(a,b)
-            if not a.lastUpdateTime then return false end
-            if not b.lastUpdateTime then return true end
+        local StageOrder = {
+            [1] = PlayerMonitor.Stage.BeforeTaxi,
+            [2] = PlayerMonitor.Stage.Taxing,
+            [3] = PlayerMonitor.Stage.HoldShort,
+            [4] = PlayerMonitor.Stage.BeforeTakeOff,
+            [5] = PlayerMonitor.Stage.Rolling,
+            [6] = PlayerMonitor.Stage.Climb,
+            [7] = PlayerMonitor.Stage.UpwindLeg,
+            [8] = PlayerMonitor.Stage.CrosswindLeg,
+            [9] = PlayerMonitor.Stage.DownwindLeg,
+            [10] = PlayerMonitor.Stage.BaseLeg,
+            [11] = PlayerMonitor.Stage.FinalApproach,
+            [12] = PlayerMonitor.Stage.TouchDown,
+            [13] = PlayerMonitor.Stage.AfterTouchDown,
+        }
 
-            return a.lastUpdateTime < b.lastUpdateTime 
-        end)
+        local msg = '本次五边成绩:'
 
-        local msg = '本次五边成绩:\n'
-        for stage,stageName in pairs(PlayerMonitor.Stage) do
-            if penalties[stageName] then
-                if Utils.getTbaleSize(penalties[stageName]) > 1 then
-                    msg = msg..StageNames_CN[stageName]..':\n'
-                    for penaltyType, items in pairs(penalties[stageName]) do
+        for order, stage in ipairs(StageOrder) do
+            if penalties[stage] then
+                if Utils.getTbaleSize(penalties[stage]) > 1 then
+                    msg = msg..'\n'..StageNames_CN[stage]..':\n'
+                    for penaltyType, items in pairs(penalties[stage]) do
                         if type(items) == 'table' then
                             for i,item in ipairs(items) do
                                 total = total - item.point
@@ -456,7 +477,7 @@ do
             end
         end
 
-        msg = msg..'--------------\n'
+        msg = msg..'----------------------------\n'
         msg = msg..string.format('远台高度: %d\n',object.NBDAlt_Far)
         msg = msg..string.format('近台高度: %d\n',object.NBDAlt_Near)
 
@@ -470,6 +491,7 @@ do
         end
 
         trigger.action.outTextForUnit(unitID,msg,30)
+        Utils.messageToAll(msg)--Debug
 
         return nil
     end
@@ -1605,6 +1627,7 @@ do
             ]]
 
             local Speed = self:getSpeed()
+
             if Speed < 70 then
                 self:setStandards({})
                 self.penalties = {}
@@ -1612,6 +1635,7 @@ do
             end
         end
 
+        self.penalties[self.stage] = self.penalties[self.stage] or {}
         local lastUpdateTime = self.penalties[self.stage].lastUpdateTime or timer.getTime() - 10
 
         if self.centerLine then
@@ -1703,7 +1727,7 @@ do
         if self.climbRateLimit then
             
             local velocity = unit:getVelocity()
-            local climbRate = velocity.y
+            local climbRate = math.floor(velocity.y*10)/10
             if not self.onClimbRate then
                 if climbRate < self.climbRateLimit then
                     self.onClimbRate = true
@@ -1722,7 +1746,7 @@ do
 
                     if timer.getTime() - lastUpdateTime >= 10 then
                         local newPenalty = {
-                            reason = string.format('起飞起飞上升率超过8m/s, 记录: %d',math.floor(climbRate)),
+                            reason = string.format('起飞上升率超过8m/s, 记录: %d',climbRate),
                             point = 0,
                             time = timer.getTime()
                         }
@@ -1749,15 +1773,17 @@ do
                     end
 
                     if not gearUp then
-                        if timer.getTime() - lastUpdateTime >= 10 then
-                            local newPenalty = {
-                                reason ='起飞松杆出现掉高',
-                                point = 3,
-                                time = timer.getTime()
-                            }
+                        if self:getAGL() >= 3 then
+                            if timer.getTime() - lastUpdateTime >= 10 then
+                                local newPenalty = {
+                                    reason ='起飞松杆出现掉高',
+                                    point = 3,
+                                    time = timer.getTime()
+                                }
 
-                            table.insert(self.penalties[self.stage]['climb'],newPenalty)
-                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                                table.insert(self.penalties[self.stage]['climb'],newPenalty)
+                                self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                            end
                         end
                     end
 
@@ -1781,7 +1807,7 @@ do
         if self.decentRateLimit then
             
             local velocity = unit:getVelocity()
-            local climbRate = velocity.y
+            local climbRate = math.floor(velocity.y*10)/10
             if not self.onClimbRate then
                 if climbRate > self.decentRateLimit then
                     self.onClimbRate = true
