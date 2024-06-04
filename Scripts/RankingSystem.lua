@@ -1606,7 +1606,7 @@ do
 
             local Speed = self:getSpeed()
             if Speed < 70 then
-                self.stage = nil
+                self:setStandards({})
                 self.repeatTime = 10
             end
         end
