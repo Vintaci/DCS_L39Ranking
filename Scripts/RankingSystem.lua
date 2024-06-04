@@ -162,6 +162,7 @@ do
 
         obj.NBDAlt_Far = nil
         obj.NBDAlt_Near = nil
+        obj.enterRunway = nil
 
         obj.takeOffPoint = nil
 
@@ -180,6 +181,8 @@ do
         obj.MonitorID = nil
         obj.repeatTime = PlayerMonitor.MonitorRepeatTime
 
+        obj.FPVGroup = nil
+        
         setmetatable(obj,self)
         self.__index = self
 
@@ -220,12 +223,15 @@ do
                 if not groupName then return end    
 
                 local landingPoint = unit:getPoint()
-                local Heading = PlayerMonitor.allGroups[groupName]:getHeading()
+                local playerMonitorObj = PlayerMonitor.allGroups[groupName]
+                if not playerMonitorObj:validation() then return end
 
-                PlayerMonitor.allGroups[groupName].penalties = PlayerMonitor.allGroups[groupName].penalties or {}
-                PlayerMonitor.allGroups[groupName].penalties[PlayerMonitor.Stage.TouchDown] = PlayerMonitor.allGroups[groupName].penalties[PlayerMonitor.Stage.TouchDown] or {}
+                local Heading = playerMonitorObj:getHeading()
 
-                if not PlayerMonitor.allGroups[groupName].penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] then
+                playerMonitorObj.penalties = playerMonitorObj.penalties or {}
+                playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown] = playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown] or {}
+
+                if not playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] then
                     if not PlayerMonitor.checkLineup(unit,landingPoint,Heading,Config.RunWay.Runway_Center) then
                         local newPenalty = {
                             reason = '着陆未在跑道中线',
@@ -233,32 +239,32 @@ do
                             time = timer.getTime()
                         }
     
-                        PlayerMonitor.allGroups[groupName].penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] = PlayerMonitor.allGroups[groupName].penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] or {}
-                        table.insert(PlayerMonitor.allGroups[groupName].penalties[PlayerMonitor.Stage.TouchDown]['lineUp'],newPenalty)
+                        playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] = playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] or {}
+                        table.insert(playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'],newPenalty)
                     end
                 end
 
-                if not PlayerMonitor.allGroups[groupName].penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] then
-                    if not mist.pointInPolygon(landingPoint,Config.RunWay[PlayerMonitor.allGroups[groupName].assignedRunway].LandingZonePolygon) then
+                if not playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] then
+                    if not mist.pointInPolygon(landingPoint,Config.RunWay[playerMonitorObj.assignedRunway].LandingZonePolygon) then
                         local newPenalty = {
                             reason = '着陆超出接地区',
                             point = 3,
                             time = timer.getTime()
                         }
     
-                        PlayerMonitor.allGroups[groupName].penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] = PlayerMonitor.allGroups[groupName].penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] or {}
-                        table.insert(PlayerMonitor.allGroups[groupName].penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'],newPenalty)
+                        playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] = playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] or {}
+                        table.insert(playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'],newPenalty)
                     end
                 end
 
-                if PlayerMonitor.allGroups[groupName].stage ~= PlayerMonitor.Stage.AfterTouchDown then
-                    timer.scheduleFunction(PlayerMonitor.showResults,PlayerMonitor.allGroups[groupName].groupName,timer.getTime()+10)
+                if playerMonitorObj.stage ~= PlayerMonitor.Stage.AfterTouchDown then
+                    timer.scheduleFunction(PlayerMonitor.showResults,groupName,timer.getTime()+10)
                 end
 
-                PlayerMonitor.allGroups[groupName].stage = PlayerMonitor.Stage.AfterTouchDown
-                PlayerMonitor.allGroups[groupName]:setStandards({decent = -99})
+                playerMonitorObj.stage = PlayerMonitor.Stage.AfterTouchDown
+                playerMonitorObj:setStandards({decent = -99,centerLine = Config.RunWay.Runway_Center})
 
-                if PlayerMonitor.allGroups[groupName].repeatTime ~= PlayerMonitor.MonitorRepeatTime then PlayerMonitor.allGroups[groupName].repeatTime = PlayerMonitor.MonitorRepeatTime end
+                if playerMonitorObj.repeatTime ~= PlayerMonitor.MonitorRepeatTime then playerMonitorObj.repeatTime = PlayerMonitor.MonitorRepeatTime end
             end
         end
 
@@ -594,6 +600,10 @@ do
 
         local unit = self.unit
         local unitPoint = unit:getPoint()
+
+        self.penalties = self.penalties or {}
+        self.penalties[self.stage] = self.penalties[self.stage] or {}
+        local lastUpdateTime = self.penalties[self.stage].lastUpdateTime or timer.getTime() - 10
         
         --转换到滑行阶段
         if self.stage ~= PlayerMonitor.Stage.Taxing then
@@ -601,16 +611,12 @@ do
                 local AGL = self:getAGL()
                 if AGL <= Config.Data[self.type].landAlt then
 
-                    Utils.messageToAll('Enter Taxi') --Debug
+                    -- Utils.messageToAll('Enter Taxi') --Debug
 
                     self.stage = PlayerMonitor.Stage.Taxing
 
-                    local speedMax = 60
-                    if mist.pointInPolygon(unitPoint,Config.TaxiWays.TaxiWay_Turn) then
-                        speedMax = 20
-                    end
-
                     self:setStandards({centerLine = Config.TaxiWays.TaxiWay_Center})
+                    if self.repeatTime ~= PlayerMonitor.MonitorRepeatTime then self.repeatTime = PlayerMonitor.MonitorRepeatTime end
                 end
             end
         end
@@ -668,7 +674,7 @@ do
                 local Speed = self:getSpeed()
                 if AGL <= Config.Data[self.type].landAlt and Speed <= 10 then
 
-                    Utils.messageToAll('Enter HoldShort') --Debug
+                    -- Utils.messageToAll('Enter HoldShort') --Debug
 
                     self.stage = PlayerMonitor.Stage.HoldShort
                     if self.repeatTime ~= 1 then self.repeatTime = 1 end
@@ -679,7 +685,7 @@ do
             --转换进入跑道
             if mist.pointInPolygon(unitPoint,Config.RunWay.RunwayPolygon) then
 
-                Utils.messageToAll('Enter BeforeTakeOff') --Debug
+                -- Utils.messageToAll('Enter BeforeTakeOff') --Debug
                 self.stage = PlayerMonitor.Stage.BeforeTakeOff
 
                 self:setStandards({centerLine = Config.RunWay.Runway_Center})
@@ -768,7 +774,7 @@ do
             --转换进入跑道
             if mist.pointInPolygon(unitPoint,Config.RunWay.RunwayPolygon) then
 
-                Utils.messageToAll('Enter BeforeTakeOff') --Debug
+                -- Utils.messageToAll('Enter BeforeTakeOff') --Debug
                 self.stage = PlayerMonitor.Stage.BeforeTakeOff
 
                 self:setStandards({centerLine = Config.RunWay.Runway_Center})
@@ -801,7 +807,7 @@ do
             --到滑跑阶段
             local Speed = mist.utils.converter('mps','kmph',mist.vec.mag(unit:getVelocity()))
             if Speed > 60 then
-                Utils.messageToAll('Enter Rolling') --Debug
+                -- Utils.messageToAll('Enter Rolling') --Debug
                 self.stage = PlayerMonitor.Stage.Rolling
 
                 self:setStandards({pitchUpLimit = 10,climbRate = 8,centerLine = Config.RunWay.Runway_Center})
@@ -920,7 +926,7 @@ do
             --转为一边
             local AGL = self:getAGL()
             if AGL > 50 then
-                Utils.messageToAll('Enter UpwindLeg') --Debug
+                -- Utils.messageToAll('Enter UpwindLeg') --Debug
                 self.stage = PlayerMonitor.Stage.UpwindLeg
                 
                 self:setStandards({heading = Config.RunWay[self.assignedRunway].heading,climbRate = 8})
@@ -976,7 +982,7 @@ do
             if MSL >= 400 then
                 if absRoll then
                     if absRoll >= 20 then
-                        Utils.messageToAll('Enter CrosswindLeg') --Debug
+                        -- Utils.messageToAll('Enter CrosswindLeg') --Debug
 
                         self.stage = PlayerMonitor.Stage.CrosswindLeg
                         self:setStandards({roll = 30,climbRate = 8})
@@ -1030,7 +1036,7 @@ do
             if MSL > 580 then
                 self:setStandards({roll = 30})
                 if math.abs(Heading - CrosswindLegHeading[self.assignedRunway]) < 5 then
-                    Utils.messageToAll('Enter DownwindLeg') --Debug
+                    -- Utils.messageToAll('Enter DownwindLeg') --Debug
 
                     self.stage = PlayerMonitor.Stage.DownwindLeg
                     self:setStandards({heading = CrosswindLegHeading[self.assignedRunway]})
@@ -1106,7 +1112,7 @@ do
             local distenceToNBD_Far = mist.utils.get2DDist(unitPoint,Config.RunWay[self.assignedRunway].NBD_Far) --m
 
             if distenceToRunway - distenceToNBD_Far > 0 and absRoll >= 10 then
-                Utils.messageToAll('Enter BaseLeg') --Debug
+                -- Utils.messageToAll('Enter BaseLeg') --Debug
 
                 self.stage = PlayerMonitor.Stage.BaseLeg
                 self:setStandards({decent = -99})
@@ -1297,16 +1303,34 @@ do
                 z = unitPoint.z + unitVelocity.z*timeToLand,
             }
             --Debug
-            self.drawID = self.drawID or 1
-            trigger.action.removeMark(self.drawID)
-            self.drawID = self.drawID + 1
-            trigger.action.circleToAll(-1,self.drawID,estimateLandingPoint,20,{1,0,0,1},{1,0,0,0.5},1)
+            local playerName = unit:getPlayerName()
+            if playerName then
+                local FPVGroupName = playerName.."_预计着陆点"
+                local newGroup = {}
+                newGroup.name = FPVGroupName
+                newGroup.task = "Ground Nothing"
+                newGroup.units = {
+                    [1] = {
+                        name = playerName.."_预计着陆点-1",
+                        type = Unit.getByName('几把远台搁着呢-1'):getTypeName(),
+                        x = estimateLandingPoint.x,
+                        y = estimateLandingPoint.z,
+                    },
+                }
+
+                self.FPVGroup = coalition.addGroup(country.id.USA , Group.Category.GROUND , newGroup)
+            end
 
             if mist.pointInPolygon(estimateLandingPoint,Config.RunWay.RunwayPolygon) or distenceToRunway < 6 then
-                Utils.messageToAll('Enter FinalApproach') --Debug
+                -- Utils.messageToAll('Enter FinalApproach') --Debug
 
                 self.stage = PlayerMonitor.Stage.FinalApproach
                 self:setStandards({decent = -99})
+
+                if self.FPVGroup then 
+                    self.FPVGroup:destroy()
+                    self.FPVGroup = nil
+                end
 
                 self.repeatTime = 1
                 return time+self.repeatTime
@@ -1372,19 +1396,6 @@ do
             ]]
 
             --扣分
-            local RunWayPoint = {
-                ['09'] = Config.RunWay.Runway_Center.line[2],
-                ['27'] = Config.RunWay.Runway_Center.line[1],
-            }
-
-            local closestRunwayPoint = RunWayPoint[Config.ActiveRunWay]
-            local RunWayNBDDistance = mist.utils.get2DDist(Config.RunWay[self.assignedRunway].NBD_Far,closestRunwayPoint)
-            if self.NBDAlt_Far then
-                RunWayNBDDistance = mist.utils.get2DDist(Config.RunWay[self.assignedRunway].NBD_Near,closestRunwayPoint)
-            end
-
-            local RunWayDistance = mist.utils.get2DDist(unitPoint,closestRunwayPoint) --m
-
             self.penalties = self.penalties or {}
             self.penalties[self.stage] = self.penalties[self.stage] or {}
             lastUpdateTime = self.penalties[self.stage].lastUpdateTime or timer.getTime() - 10
@@ -1421,107 +1432,136 @@ do
                 end
             end
 
-            if RunWayDistance <= RunWayNBDDistance then
-                local AGL = self:getAGL()
-            
+            if not self.NBDAlt_Near then
+                local RunWayPoint = {
+                    ['09'] = Config.RunWay.Runway_Center.line[2],
+                    ['27'] = Config.RunWay.Runway_Center.line[1],
+                }
+
+                local closestRunwayPoint = RunWayPoint[Config.ActiveRunWay]
+                local RunWayNBDDistance = mist.utils.get2DDist(Config.RunWay[self.assignedRunway].NBD_Far,closestRunwayPoint)
                 if self.NBDAlt_Far then
-                    if not self.NBDAlt_Near then
-                        if not self.penalties[self.stage]['NBD_Near'] then  
-                            if AGL < 40 then
+                    RunWayNBDDistance = mist.utils.get2DDist(Config.RunWay[self.assignedRunway].NBD_Near,closestRunwayPoint)
+                end
+
+                local RunWayDistance = mist.utils.get2DDist(unitPoint,closestRunwayPoint) --m
+
+                if RunWayDistance <= RunWayNBDDistance+50 then
+                    local AGL = self:getAGL()
+                
+                    if self.NBDAlt_Far then
+                        if not self.NBDAlt_Near then
+
+                            self.NBDAlt_Near = math.floor(AGL)
+                            trigger.action.outTextForUnit(unit:getID(),string.format('近台高度记录: %d', math.floor(AGL)),5)
+                            -- Utils.messageToAll(string.format('近台高度记录: %d', math.floor(AGL)))--Debug
+
+                            if not self.penalties[self.stage]['NBD_Near'] then  
+                                if AGL < 40 then
+                                    local newPenalty = {
+                                        reason = string.format('近台低于 40 米, 记录高度: %d', math.floor(AGL)),
+                                        point = 2,
+                                        time = timer.getTime()
+                                    }
+                
+                                    self.penalties[self.stage]['NBD_Near'] = self.penalties[self.stage]['NBD_Near'] or {}
+                                    table.insert(self.penalties[self.stage]['NBD_Near'],newPenalty)
+                                    self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                                end
+
+                                if AGL > 110 then
+                                    local newPenalty = {
+                                        reason = string.format('近台高于 110 米, 记录高度: %d', math.floor(AGL)),
+                                        point = 2,
+                                        time = timer.getTime()
+                                    }
+                
+                                    self.penalties[self.stage]['NBD_Near'] = self.penalties[self.stage]['NBD_Near'] or {}
+                                    table.insert(self.penalties[self.stage]['NBD_Near'],newPenalty)
+                                    self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                                end
+                            end
+                        end
+                    end
+
+                    if not self.NBDAlt_Far then
+                        
+                        self.NBDAlt_Far = math.floor(AGL)
+                        trigger.action.outTextForUnit(unit:getID(),string.format('远台高度记录: %d', math.floor(AGL)),5)
+                        -- Utils.messageToAll(string.format('远台高度记录: %d', math.floor(AGL)))--Debug
+
+                        if not self.penalties[self.stage]['NBD_Far'] then
+                            if AGL < 120 then
                                 local newPenalty = {
-                                    reason = string.format('近台低于 40 米, 记录高度: %d', math.floor(AGL)),
+                                    reason = string.format('远台低于 120 米, 记录高度: %d', math.floor(AGL)),
                                     point = 2,
                                     time = timer.getTime()
                                 }
             
-                                self.penalties[self.stage]['NBD_Near'] = self.penalties[self.stage]['NBD_Near'] or {}
-                                table.insert(self.penalties[self.stage]['NBD_Near'],newPenalty)
+                                self.penalties[self.stage]['NBD_Far'] = self.penalties[self.stage]['NBD_Far'] or {}
+                                table.insert(self.penalties[self.stage]['NBD_Far'],newPenalty)
                                 self.penalties[self.stage].lastUpdateTime = timer.getTime()
                             end
 
-                            if AGL > 110 then
+                            if AGL > 230 then
                                 local newPenalty = {
-                                    reason = string.format('近台高于 110 米, 记录高度: %d', math.floor(AGL)),
+                                    reason = string.format('远台高于 230 米, 记录高度: %d', math.floor(AGL)),
                                     point = 2,
                                     time = timer.getTime()
                                 }
             
-                                self.penalties[self.stage]['NBD_Near'] = self.penalties[self.stage]['NBD_Near'] or {}
-                                table.insert(self.penalties[self.stage]['NBD_Near'],newPenalty)
+                                self.penalties[self.stage]['NBD_Far'] = self.penalties[self.stage]['NBD_Far'] or {}
+                                table.insert(self.penalties[self.stage]['NBD_Far'],newPenalty)
                                 self.penalties[self.stage].lastUpdateTime = timer.getTime()
                             end
                         end
-
-                        self.NBDAlt_Near = math.floor(AGL)
-                        trigger.action.outTextForUnit(unit:getID(),string.format('近台高度记录: %d', math.floor(AGL)),5)
                     end
                 end
-
+                
                 if not self.NBDAlt_Far then
+                    if not self.penalties[self.stage]['tooLowBeforeNBDFar'] then
+                        if self:getMSL() < 198 then
+                            
+                            -- Utils.messageToAll('MSL: '..self:getMSL())--Debug
 
-                    if not self.penalties[self.stage]['NBD_Far'] then
-                        if AGL < 120 then
                             local newPenalty = {
-                                reason = string.format('远台低于 120 米, 记录高度: %d', math.floor(AGL)),
-                                point = 2,
+                                reason = string.format('远台前气压高度低于 200 米[-35 未扣除], 记录高度: %d', math.floor(self:getMSL())),
+                                point = 0,
                                 time = timer.getTime()
                             }
-        
-                            self.penalties[self.stage]['NBD_Far'] = self.penalties[self.stage]['NBD_Far'] or {}
-                            table.insert(self.penalties[self.stage]['NBD_Far'],newPenalty)
-                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
-                        end
 
-                        if AGL > 230 then
-                            local newPenalty = {
-                                reason = string.format('远台高于 230 米, 记录高度: %d', math.floor(AGL)),
-                                point = 2,
-                                time = timer.getTime()
-                            }
-        
-                            self.penalties[self.stage]['NBD_Far'] = self.penalties[self.stage]['NBD_Far'] or {}
-                            table.insert(self.penalties[self.stage]['NBD_Far'],newPenalty)
+                            self.penalties[self.stage]['tooLowBeforeNBDFar'] = self.penalties[self.stage]['tooLowBeforeNBDFar'] or {}
+                            table.insert(self.penalties[self.stage]['tooLowBeforeNBDFar'],newPenalty)
                             self.penalties[self.stage].lastUpdateTime = timer.getTime()
                         end
                     end
-                    
-                    self.NBDAlt_Far = math.floor(AGL)
-                    trigger.action.outTextForUnit(unit:getID(),string.format('远台高度记录: %d', math.floor(AGL)),5)
                 end
-            end
-            
-            if not self.NBDAlt_Far then
-                if not self.penalties[self.stage]['tooLowBeforeNBDFar'] then
-                    if self:getMSL() < 198 then
-                        local newPenalty = {
-                            reason = string.format('远台前气压高度低于 200 米[-35 未扣除], 记录高度: %d', math.floor(self:getMSL())),
-                            point = 0,
-                            time = timer.getTime()
-                        }
 
-                        self.penalties[self.stage]['tooLowBeforeNBDFar'] = self.penalties[self.stage]['tooLowBeforeNBDFar'] or {}
-                        table.insert(self.penalties[self.stage]['tooLowBeforeNBDFar'],newPenalty)
-                        self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                --检查单
+                if self.NBDAlt_Far then
+                    if not self.BeforeLandingCheckList.finish then
+                        if RunWayDistance > RunWayNBDDistance then
+                            if not self:PerformCheckList(self.BeforeLandingCheckList,unit) then
+                                if self.repeatTime ~= 1 then self.repeatTime = 1 end
+                                return time+self.repeatTime
+                            end
+
+                            if self.BeforeLandingCheckList.finish then
+                                local unitID = unit:getID()
+                                local msg = self.BeforeLandingCheckList.checkListName..', 完成.'
+                                trigger.action.outTextForUnit(unitID,msg,10)
+                            end
+                        end
                     end
                 end
             end
 
-            --检查单
-            if self.NBDAlt_Far then
-                if not self.BeforeLandingCheckList.finish then
-                    if RunWayDistance > RunWayNBDDistance then
-                        if not self:PerformCheckList(self.BeforeLandingCheckList,unit) then
-                            if self.repeatTime ~= 1 then self.repeatTime = 1 end
-                            return time+self.repeatTime
-                        end
-
-                        if self.BeforeLandingCheckList.finish then
-                            local unitID = unit:getID()
-                            local msg = self.BeforeLandingCheckList.checkListName..', 完成.'
-                            trigger.action.outTextForUnit(unitID,msg,10)
-                            if self.repeatTime ~= PlayerMonitor.MonitorRepeatTime then self.repeatTime = PlayerMonitor.MonitorRepeatTime end
-                        end
-                    end
+            if not self.enterRunway then
+                if mist.pointInPolygon(unitPoint,Config.RunWay.RunwayPolygon) then
+                    local AGL = self:getAGL()
+                    self.enterRunway = AGL 
+                    trigger.action.outTextForUnit(unit:getID(),string.format('进入跑道高度记录: %d', math.floor(AGL)),5)
+                    -- Utils.messageToAll(string.format('进入跑道高度记录: %d', math.floor(AGL)))--Debug
                 end
             end
 
@@ -1563,10 +1603,14 @@ do
                 4.保持跑道航向
                 5.姿态稳定后联系 ATC 告知已复飞听从指示
             ]]
+
+            local Speed = self:getSpeed()
+            if Speed < 70 then
+                self.stage = nil
+                self.repeatTime = 10
+            end
         end
 
-        self.penalties = self.penalties or {}
-        self.penalties[self.stage] = self.penalties[self.stage] or {}
         local lastUpdateTime = self.penalties[self.stage].lastUpdateTime or timer.getTime() - 10
 
         if self.centerLine then
