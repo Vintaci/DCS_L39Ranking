@@ -1607,6 +1607,7 @@ do
             local Speed = self:getSpeed()
             if Speed < 70 then
                 self:setStandards({})
+                self.penalties = {}
                 self.repeatTime = 10
             end
         end
