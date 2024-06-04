@@ -480,6 +480,7 @@ do
         msg = msg..'----------------------------\n'
         msg = msg..string.format('远台高度: %d\n',object.NBDAlt_Far)
         msg = msg..string.format('近台高度: %d\n',object.NBDAlt_Near)
+        msg = msg..string.format('进入跑道高度: %d\n',object.enterRunway)
 
         msg = msg..'\n------- 总分: '..total..'分 -------\n'
         if total >= 28 then
@@ -491,7 +492,6 @@ do
         end
 
         trigger.action.outTextForUnit(unitID,msg,30)
-        Utils.messageToAll(msg)--Debug
 
         return nil
     end
@@ -1631,6 +1631,11 @@ do
             if Speed < 70 then
                 self:setStandards({})
                 self.penalties = {}
+
+                self.NBDAlt_Far = nil
+                self.NBDAlt_Near = nil
+                self.enterRunway = nil
+
                 self.repeatTime = 10
             end
         end
