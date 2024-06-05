@@ -106,6 +106,51 @@ do
             duration = 1, --Seconds
             loop = false,
         },
+        ['教官讲的是国语还是英文? 为什么还那么高? 基辅在哪里？'] = {
+            file = 'JBC_tooHigh_1.ogg',
+            duration = 6, --Seconds
+            loop = false,
+        },
+        ['补! 补xN!'] = {
+            file = 'JBC_tooSlow_1.ogg',
+            duration = 6, --Seconds
+            loop = false,
+        },
+        ['好开始收油门,怎么控制'] = {
+            file = 'JBC_SlowDown_1.ogg',
+            duration = 3, --Seconds
+            loop = false,
+        },
+        ['收油门 !收!'] = {
+            file = 'JBC_SlowDown_2.ogg',
+            duration = 3, --Seconds
+            loop = false,
+        },
+        ['你这科不及格啦,讲评单拿给我写.下次再这样子我们就直接淘汰了啊,我不要再跟你飞了,我受不了了.'] = {
+            file = 'JBC_Not_Pass_2.ogg',
+            duration = 9, --Seconds
+            loop = false,
+        },
+        ['你不要飞了,你不要飞了,手拿开,淘汰好了.'] = {
+            file = 'JBC_Not_Pass_1.ogg',
+            duration = 19, --Seconds
+            loop = false,
+        },
+        ['哦唷,我这边要是有枪我就把你毙了!'] = {
+            file = 'JBC_Mistake_Universal_3.ogg',
+            duration = 4, --Seconds
+            loop = false,
+        },
+        ['我急都急死了,剩下一分钟可以编队了你还不掌握!'] = {
+            file = 'JBC_Mistake_Universal_2.ogg',
+            duration = 4, --Seconds
+            loop = false,
+        },
+        ['满意吗? 满意吗? 满意吗? 满意吗? 满意吗? '] = {
+            file = 'JBC_Mistake_Universal_1.ogg',
+            duration = 4, --Seconds
+            loop = false,
+        },
     }
 
     PlayerMonitor.allGroups = {}
@@ -182,6 +227,8 @@ do
         obj.repeatTime = PlayerMonitor.MonitorRepeatTime
 
         obj.FPVGroup = nil
+
+        obj.isRadioTransmiting = false
         
         setmetatable(obj,self)
         self.__index = self
@@ -236,6 +283,13 @@ do
 
                 if not playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['lineUp'] then
                     if not PlayerMonitor.checkLineup(unit,landingPoint,Heading,Config.RunWay.Runway_Center) then
+                        local soundfiles = {
+                            '中线对歪了',
+                            '满意吗? 满意吗? 满意吗? 满意吗? 满意吗? ',
+                        }
+                        
+                        playerMonitorObj:playTalkVoice(soundfiles[math.random(1,#soundfiles)],"教官")
+
                         local newPenalty = {
                             reason = '着陆未在跑道中线',
                             point = 35,
@@ -257,6 +311,13 @@ do
                             time = timer.getTime()
                         }
     
+                        local soundfiles = {
+                            '满意吗? 满意吗? 满意吗? 满意吗? 满意吗? ',
+                            '哦唷,我这边要是有枪我就把你毙了!',
+                        }
+                        
+                        playerMonitorObj:playTalkVoice(soundfiles[math.random(1,#soundfiles)],"教官")
+
                         playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] = playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'] or {}
                         table.insert(playerMonitorObj.penalties[PlayerMonitor.Stage.TouchDown]['outOfLandingZone'],newPenalty)
 
@@ -489,6 +550,19 @@ do
 
         if total < 28 then
             msg = msg..'------- 不合格 -------'
+
+            local soundfiles = {
+                '你这科不及格啦,讲评单拿给我写.下次再这样子我们就直接淘汰了啊,我不要再跟你飞了,我受不了了.',
+                '我急都急死了,剩下一分钟可以编队了你还不掌握!',
+            }
+            
+            local soundFileName = soundfiles[math.random(1,#soundfiles)]
+
+            if total < 0 then
+                soundFileName = '你不要飞了,你不要飞了,手拿开,淘汰好了.'
+            end
+
+            object:playTalkVoice(soundFileName,"教官")
         end
 
         trigger.action.outTextForUnit(unitID,msg,30)
@@ -558,35 +632,40 @@ do
             return
         end
 
-        local unit = self.unit
+        if not self.isRadioTransmiting then
+            local unit = self.unit
 
-        -- local SetFrequency = { 
-        --     id = 'SetFrequency', 
-        --     params = { 
-        --       frequency = 305*1000000, 
-        --       modulation = 0, 
-        --       power = 10, 
-        --     } 
-        -- }
-        -- unit:getController():setCommand(SetFrequency)
+            -- local SetFrequency = { 
+            --     id = 'SetFrequency', 
+            --     params = { 
+            --       frequency = 305*1000000, 
+            --       modulation = 0, 
+            --       power = 10, 
+            --     } 
+            -- }
+            -- unit:getController():setCommand(SetFrequency)
 
-        local file = filePath..PlayerMonitor.SoundFiles[subtitle].file
-        local duration = PlayerMonitor.SoundFiles[subtitle].duration
-        local subtitle = speaker..': '..subtitle
+            local file = filePath..PlayerMonitor.SoundFiles[subtitle].file
+            local duration = PlayerMonitor.SoundFiles[subtitle].duration
+            local subtitle = speaker..': '..subtitle
 
-        local msg = { 
-            id = 'TransmitMessage', 
-            params = {
-              duration = duration,
-              subtitle = subtitle,
-              loop = false,
-              file = file,
-            }  
-        }
+            local msg = { 
+                id = 'TransmitMessage', 
+                params = {
+                duration = duration,
+                subtitle = subtitle,
+                loop = false,
+                file = file,
+                }  
+            }
 
-        unit:getController():setCommand(msg)
-        -- local controller = unit:getController()
-        -- controller:setCommand(msg)
+            unit:getController():setCommand(msg)
+
+            self.isRadioTransmiting = true
+            timer.scheduleFunction(function(vars)
+                vars.context.isRadioTransmiting = false
+            end,{context = self},timer.getTime()+duration)
+        end
     end
 
     function PlayerMonitor:playTalkVoice(subtitle,speaker)
@@ -1094,6 +1173,15 @@ do
                     self.penalties[self.stage].lastUpdateTime = timer.getTime()
                 end
             end
+            
+            if math.random(1,4) == 4 then
+                local Speed = self:getSpeed()
+                if Speed >= 370 and Speed < 400 then
+                    local soundFileName = '好开始收油门,怎么控制'
+
+                    self:playTalkVoice(soundFileName,"教官")
+                end
+            end
         end
 
         if self.stage == PlayerMonitor.Stage.DownwindLeg then
@@ -1133,14 +1221,16 @@ do
             local distenceToRunway = mist.utils.get2DDist(unitPoint,RunWayPoint[self.assignedRunway]) --m
             local distenceToNBD_Far = mist.utils.get2DDist(unitPoint,Config.RunWay[self.assignedRunway].NBD_Far) --m
 
-            if distenceToRunway - distenceToNBD_Far > 0 and absRoll >= 10 then
-                -- Utils.messageToAll('Enter BaseLeg') --Debug
+            if distenceToRunway - distenceToNBD_Far > 0 then
+                if absRoll >= 10 then
+                    -- Utils.messageToAll('Enter BaseLeg') --Debug
 
-                self.stage = PlayerMonitor.Stage.BaseLeg
-                self:setStandards({decent = -99})
+                    self.stage = PlayerMonitor.Stage.BaseLeg
+                    self:setStandards({decent = -99})
 
-                self.repeatTime = 1
-                return time+self.repeatTime
+                    self.repeatTime = 1
+                    return time+self.repeatTime
+                end
             end
 
             --扣分
@@ -1151,6 +1241,14 @@ do
             if not self.penalties[self.stage]['NBD'] then
                 if NBDdirection < 250 then
                     if self:getSpeed() >= 400 then
+
+                        local soundfiles =  {
+                            '满意吗? 满意吗? 满意吗? 满意吗? 满意吗? ',
+                            '收油门 !收!',
+                        }
+                        local soundFileName = soundfiles[math.random(1,#soundfiles)]
+                        self:playTalkVoice(soundFileName,'教官')
+                        
                         local newPenalty = {
                             reason = '昼间 NDB 过 250 未减速[-2 未扣除]',
                             point = 0,
@@ -1179,8 +1277,11 @@ do
                     if self.onSpeed then
                         if Speed <= 380 then
                             self.onSpeed = false
-                            self:playTalkVoice('注意速度','教官')
 
+                            local soundfiles =  {
+                                '注意速度',
+                            }
+                            local soundFileName = soundfiles[math.random(1,#soundfiles)]
 
                             self.penalties[self.stage]['speed'] = self.penalties[self.stage]['speed'] or {}
 
@@ -1193,16 +1294,32 @@ do
                             if Speed <= 350 then
                                 newPenalty.reason = '巡航过程中空速≤350'
                                 newPenalty.point = 3
+
+                                soundfiles =  {
+                                    '注意速度',
+                                    '我急都急死了,剩下一分钟可以编队了你还不掌握!',
+                                    '满意吗? 满意吗? 满意吗? 满意吗? 满意吗? ',
+                                    '哦唷,我这边要是有枪我就把你毙了!',
+                                    '补! 补xN!'
+                                }
+                                soundFileName = soundfiles[math.random(1,#soundfiles)]
                             end
         
                             table.insert(self.penalties[self.stage]['speed'],newPenalty)
                             self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                            
+                            self:playTalkVoice(soundFileName,'教官')
                         end
 
                         if Speed >= 420 then
                             self.onSpeed = false
-                            self:playTalkVoice('注意速度','教官')
 
+                            local soundfiles = {
+                                '注意速度',
+                                '好开始收油门,怎么控制',
+                            }
+
+                            local soundFileName = soundfiles[math.random(1,#soundfiles)]
 
                             self.penalties[self.stage]['speed'] = self.penalties[self.stage]['speed'] or {}
 
@@ -1215,10 +1332,22 @@ do
                             if Speed >= 450 then
                                 newPenalty.reason = '巡航过程中空速≥450'
                                 newPenalty.point = 3
+
+                                soundfiles =  {
+                                    '注意速度',
+                                    '我急都急死了,剩下一分钟可以编队了你还不掌握!',
+                                    '满意吗? 满意吗? 满意吗? 满意吗? 满意吗? ',
+                                    '哦唷,我这边要是有枪我就把你毙了!',
+                                    '收油门 !收!'
+                                }
+
+                                soundFileName = soundfiles[math.random(1,#soundfiles)]
                             end
         
                             table.insert(self.penalties[self.stage]['speed'],newPenalty)
                             self.penalties[self.stage].lastUpdateTime = timer.getTime()
+
+                            self:playTalkVoice(soundFileName,'教官')
                         end
                     end
                 end
@@ -1235,12 +1364,11 @@ do
                     if MSL <= 580 then
                         self.onAltitude = false
 
-                        local fileNames = {
+                        local soundfiles = {
                             '注意高度',
                             '高度偏低了',
                         }
-
-                        self:playTalkVoice(fileNames[math.random(1,#fileNames)],'教官')
+                        local soundFileName = soundfiles[math.random(1,#soundfiles)]
 
                         self.penalties[self.stage]['altitude'] = self.penalties[self.stage]['altitude'] or {}
 
@@ -1253,21 +1381,31 @@ do
                         if MSL <= 550 then
                             newPenalty.reason = '巡航程中高度偏差≤550'
                             newPenalty.point = 3
+
+                            soundfiles =  {
+                                '高度偏低了',
+                                '我急都急死了,剩下一分钟可以编队了你还不掌握!',
+                                '满意吗? 满意吗? 满意吗? 满意吗? 满意吗? ',
+                                '哦唷,我这边要是有枪我就把你毙了!',
+                            }
+
+                            soundFileName = soundfiles[math.random(1,#soundfiles)]
                         end
     
                         table.insert(self.penalties[self.stage]['altitude'],newPenalty)
                         self.penalties[self.stage].lastUpdateTime = timer.getTime()
+
+                        self:playTalkVoice(soundFileName,'教官')
                     end 
 
                     if MSL >= 620 then
                         self.onAltitude = false
 
-                        local fileNames = {
+                        local soundfiles = {
                             '注意高度',
                             '高度偏高了',
                         }
-
-                        self:playTalkVoice(fileNames[math.random(1,#fileNames)],'教官')
+                        local soundFileName = soundfiles[math.random(1,#soundfiles)]
 
                         self.penalties[self.stage]['altitude'] = self.penalties[self.stage]['altitude'] or {}
 
@@ -1280,10 +1418,20 @@ do
                         if MSL <= 650 then
                             newPenalty.reason = '巡航程中高度偏差≥650'
                             newPenalty.point = 3
+
+                            soundfiles =  {
+                                '高度偏高了',
+                                '教官讲的是国语还是英文? 为什么还那么高? 基辅在哪里？',
+                                '哦唷,我这边要是有枪我就把你毙了!',
+                            }
+
+                            soundFileName = soundfiles[math.random(1,#soundfiles)]
                         end
     
                         table.insert(self.penalties[self.stage]['altitude'],newPenalty)
                         self.penalties[self.stage].lastUpdateTime = timer.getTime()
+
+                        self:playTalkVoice(soundFileName,'教官')
                     end 
                 end
 
@@ -1393,6 +1541,17 @@ do
                     table.insert(self.penalties[self.stage]['lineUp'],newPenalty)
                     self.penalties[self.stage].lastUpdateTime = timer.getTime()
                 end
+            end
+
+            local Speed = self:getSpeed()
+            if Speed < 250 then
+                local soundfiles =  {
+                    '注意速度',
+                    '补! 补xN!',
+                    '哦唷,我这边要是有枪我就把你毙了!',
+                }
+                local soundFileName = soundfiles[math.random(1,#soundfiles)]
+                self:playTalkVoice(soundFileName,'教官')
             end
         end
 
@@ -1584,9 +1743,31 @@ do
                     self.enterRunway = AGL 
                     trigger.action.outTextForUnit(unit:getID(),string.format('进入跑道高度记录: %d', math.floor(AGL)),5)
                     -- Utils.messageToAll(string.format('进入跑道高度记录: %d', math.floor(AGL)))--Debug
+                    self:playTalkVoice('好开始收油门,怎么控制','教官')
                 end
             end
 
+            local Speed = self:getSpeed()
+            if Speed < 200 then
+                local soundfiles =  {
+                    '注意速度',
+                    '补! 补xN!',
+                    '哦唷,我这边要是有枪我就把你毙了!',
+                }
+                local soundFileName = soundfiles[math.random(1,#soundfiles)]
+                self:playTalkVoice(soundFileName,'教官')
+            end
+            if Speed > 230 then
+                local soundfiles =  {
+                    '注意速度',
+                    '好开始收油门,怎么控制',
+                }
+                local soundFileName = soundfiles[math.random(1,#soundfiles)]
+
+                if Speed > 250 then soundFileName = '收油门 !收!' end
+
+                self:playTalkVoice(soundFileName,'教官')
+            end
         end
 
         if self.stage == PlayerMonitor.Stage.AfterTouchDown then
@@ -1664,14 +1845,19 @@ do
             if self.onCenterLine then
                 if not PlayerMonitor.checkLineup(unit,unitPoint,Heading,self.centerLine) then
                     self.onCenterLine = false
-
-                    self:playTalkVoice('中线对歪了','教官')
+                    
+                    local soundfiles =  {
+                        '中线对歪了',
+                        '满意吗? 满意吗? 满意吗? 满意吗? 满意吗? ',
+                    }
+                    local soundFileName = soundfiles[math.random(1,#soundfiles)]
 
                     --Add penalties.
                     self.penalties[self.stage]['lineUp'] = self.penalties[self.stage]['lineUp'] or {}
                     local tbaleSize = Utils.getTbaleSize(self.penalties[self.stage]['lineUp'])
                     if tbaleSize <= 2 then
                         if timer.getTime() - lastUpdateTime >= 10 then
+
                             local newPenalty = {
                                 reason = '滑行、滑跑未压中线或偏离',
                                 point = 1,
@@ -1681,12 +1867,21 @@ do
                             if tbaleSize + 1 == 3 then
                                 newPenalty.reason = '滑行、滑跑未压中线或偏离三次'
                                 newPenalty.point = 5
+
+                                soundfiles = {
+                                    '哦唷,我这边要是有枪我就把你毙了!',
+                                    '我急都急死了,剩下一分钟可以编队了你还不掌握!',
+                                }
+    
+                                soundFileName = soundfiles[math.random(1,#soundfiles)]
                             end
 
                             table.insert(self.penalties[self.stage]['lineUp'],newPenalty)
                             self.penalties[self.stage].lastUpdateTime = timer.getTime()
                         end
                     end
+                    
+                    self:playTalkVoice(soundFileName,'教官')
                 end
             end
 
@@ -1706,7 +1901,12 @@ do
             if self.onCourse then
                 if math.abs(Heading - self.headingLimit) > 3 then
                     self.onCourse = false
-                    self:playTalkVoice('注意航向','教官')
+
+                    local soundfiles =  {
+                        '注意航向',
+                        '满意吗? 满意吗? 满意吗? 满意吗? 满意吗? ',
+                    }
+                    local soundFileName = soundfiles[math.random(1,#soundfiles)]
 
                     --Add penalties
                     self.penalties[self.stage]['heading'] = self.penalties[self.stage]['heading'] or {}
@@ -1719,11 +1919,20 @@ do
                         }
                         if math.abs(Heading - self.headingLimit) > 5 then
                             newPenalty.point = 2
+
+                            soundfiles = {
+                                '哦唷,我这边要是有枪我就把你毙了!',
+                                '我急都急死了,剩下一分钟可以编队了你还不掌握!',
+                            }
+
+                            soundFileName = soundfiles[math.random(1,#soundfiles)]
                         end
 
                         table.insert(self.penalties[self.stage]['heading'],newPenalty)
                         self.penalties[self.stage].lastUpdateTime = timer.getTime()
                     end
+
+                    self:playTalkVoice(soundFileName,'教官')
                 end
             end
 
@@ -1744,7 +1953,12 @@ do
             if self.onClimbRate then
                 if climbRate > self.climbRateLimit then
                     self.onClimbRate = false
-                    self:playTalkVoice('注意上升率','教官')
+
+                    local soundfiles =  {
+                        '注意上升率',
+                        '满意吗? 满意吗? 满意吗? 满意吗? 满意吗? ',
+                    }
+                    local soundFileName = soundfiles[math.random(1,#soundfiles)]
 
                     --Add penalties
                     self.penalties[self.stage]['climb'] = self.penalties[self.stage]['climb'] or {}
@@ -1759,6 +1973,8 @@ do
                         table.insert(self.penalties[self.stage]['climb'],newPenalty)
                         self.penalties[self.stage].lastUpdateTime = timer.getTime()
                     end
+
+                    self:playTalkVoice(soundFileName,'教官')
                 end
 
                 if climbRate < 0 then
