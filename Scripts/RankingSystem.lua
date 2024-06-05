@@ -1544,7 +1544,7 @@ do
             end
 
             local Speed = self:getSpeed()
-            if Speed < 250 then
+            if Speed < 240 then
                 local soundfiles =  {
                     '注意速度',
                     '补! 补xN!',
@@ -1745,28 +1745,29 @@ do
                     -- Utils.messageToAll(string.format('进入跑道高度记录: %d', math.floor(AGL)))--Debug
                     self:playTalkVoice('好开始收油门,怎么控制','教官')
                 end
-            end
 
-            local Speed = self:getSpeed()
-            if Speed < 200 then
-                local soundfiles =  {
-                    '注意速度',
-                    '补! 补xN!',
-                    '哦唷,我这边要是有枪我就把你毙了!',
-                }
-                local soundFileName = soundfiles[math.random(1,#soundfiles)]
-                self:playTalkVoice(soundFileName,'教官')
-            end
-            if Speed > 230 then
-                local soundfiles =  {
-                    '注意速度',
-                    '好开始收油门,怎么控制',
-                }
-                local soundFileName = soundfiles[math.random(1,#soundfiles)]
+                local Speed = self:getSpeed()
+                if Speed < 190 then
+                    local soundfiles =  {
+                        '注意速度',
+                        '补! 补xN!',
+                        '哦唷,我这边要是有枪我就把你毙了!',
+                    }
+                    local soundFileName = soundfiles[math.random(1,#soundfiles)]
+                    self:playTalkVoice(soundFileName,'教官')
+                end
 
-                if Speed > 250 then soundFileName = '收油门 !收!' end
+                if Speed > 250 then
+                    local soundfiles =  {
+                        '注意速度',
+                        '好开始收油门,怎么控制',
+                    }
+                    local soundFileName = soundfiles[math.random(1,#soundfiles)]
 
-                self:playTalkVoice(soundFileName,'教官')
+                    if Speed > 280 then soundFileName = '收油门 !收!' end
+
+                    self:playTalkVoice(soundFileName,'教官')
+                end
             end
         end
 
