@@ -1688,24 +1688,24 @@ do
                     end
                 end
                 
-                if not self.NBDAlt_Far then
-                    if not self.penalties[self.stage]['tooLowBeforeNBDFar'] then
-                        if self:getMSL() < 198 then
+                -- if not self.NBDAlt_Far then
+                --     if not self.penalties[self.stage]['tooLowBeforeNBDFar'] then
+                --         if self:getMSL() < 198 then
                             
-                            -- Utils.messageToAll('MSL: '..self:getMSL())--Debug
+                --             -- Utils.messageToAll('MSL: '..self:getMSL())--Debug
 
-                            local newPenalty = {
-                                reason = string.format('远台前气压高度低于 200 米[-35 未扣除], 记录高度: %d', math.floor(self:getMSL())),
-                                point = 0,
-                                time = timer.getTime()
-                            }
+                --             local newPenalty = {
+                --                 reason = string.format('远台前气压高度低于 200 米[-35 未扣除], 记录高度: %d', math.floor(self:getMSL())),
+                --                 point = 0,
+                --                 time = timer.getTime()
+                --             }
 
-                            self.penalties[self.stage]['tooLowBeforeNBDFar'] = self.penalties[self.stage]['tooLowBeforeNBDFar'] or {}
-                            table.insert(self.penalties[self.stage]['tooLowBeforeNBDFar'],newPenalty)
-                            self.penalties[self.stage].lastUpdateTime = timer.getTime()
-                        end
-                    end
-                end
+                --             self.penalties[self.stage]['tooLowBeforeNBDFar'] = self.penalties[self.stage]['tooLowBeforeNBDFar'] or {}
+                --             table.insert(self.penalties[self.stage]['tooLowBeforeNBDFar'],newPenalty)
+                --             self.penalties[self.stage].lastUpdateTime = timer.getTime()
+                --         end
+                --     end
+                -- end
 
                 --检查单
                 if self.NBDAlt_Far then
