@@ -1542,17 +1542,6 @@ do
                     self.penalties[self.stage].lastUpdateTime = timer.getTime()
                 end
             end
-
-            local Speed = self:getSpeed()
-            if Speed < 240 then
-                local soundfiles =  {
-                    '注意速度',
-                    '补! 补xN!',
-                    '哦唷,我这边要是有枪我就把你毙了!',
-                }
-                local soundFileName = soundfiles[math.random(1,#soundfiles)]
-                self:playTalkVoice(soundFileName,'教官')
-            end
         end
 
         if self.stage == PlayerMonitor.Stage.FinalApproach then
@@ -1797,7 +1786,7 @@ do
 
                 self.repeatTime = 10
             end
-            
+
         end
 
         self.penalties[self.stage] = self.penalties[self.stage] or {}
