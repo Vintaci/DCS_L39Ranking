@@ -1745,29 +1745,6 @@ do
                     -- Utils.messageToAll(string.format('进入跑道高度记录: %d', math.floor(AGL)))--Debug
                     self:playTalkVoice('好开始收油门,怎么控制','教官')
                 end
-
-                local Speed = self:getSpeed()
-                if Speed < 190 then
-                    local soundfiles =  {
-                        '注意速度',
-                        '补! 补xN!',
-                        '哦唷,我这边要是有枪我就把你毙了!',
-                    }
-                    local soundFileName = soundfiles[math.random(1,#soundfiles)]
-                    self:playTalkVoice(soundFileName,'教官')
-                end
-
-                if Speed > 250 then
-                    local soundfiles =  {
-                        '注意速度',
-                        '好开始收油门,怎么控制',
-                    }
-                    local soundFileName = soundfiles[math.random(1,#soundfiles)]
-
-                    if Speed > 280 then soundFileName = '收油门 !收!' end
-
-                    self:playTalkVoice(soundFileName,'教官')
-                end
             end
         end
 
@@ -1820,6 +1797,7 @@ do
 
                 self.repeatTime = 10
             end
+            
         end
 
         self.penalties[self.stage] = self.penalties[self.stage] or {}
